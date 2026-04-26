@@ -1,0 +1,16 @@
+{
+  "track": "情感赛道",
+  "title": "【测试】情感赛道：今日话题",
+  "summary": "这是测试文章的简介，用于验证流程是否正常。",
+  "word_count": 700,
+  "hot_topic": {
+    "title": "情感赛道：今日话题",
+    "angle": "自由发挥",
+    "original_topic": "情感"
+  },
+  "ai_flavor_hits": [],
+  "ai_pattern_hits": [],
+  "max_similarity": 0.05,
+  "cover_image": null,
+  "generated_at": "2026-04-26T14:35:36.056740"
+}

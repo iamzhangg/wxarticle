@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>【测试】情感赛道：今日话题 - 微信公众号文章预览</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background: #f0f0f0;
+            font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            padding: 20px;
+        }
+        .preview-container {
+            display: flex;
+            gap: 30px;
+            max-width: 1200px;
+            width: 100%;
+        }
+        /* 手机预览框架 */
+        .phone-frame {
+            width: 375px;
+            min-width: 375px;
+            background: #fff;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+            overflow: hidden;
+            align-self: flex-start;
+        }
+        .phone-header {
+            background: #1a1a1a;
+            color: white;
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .phone-header .back-btn {
+            font-size: 18px;
+            cursor: pointer;
+        }
+        .phone-header .title-bar {
+            flex: 1;
+            text-align: center;
+            font-size: 14px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .phone-content {
+            padding: 0;
+            min-height: 600px;
+            overflow-y: auto;
+        }
+        /* 文章元信息 */
+        .article-meta {
+            padding: 20px 16px 12px;
+            border-bottom: 1px solid #eee;
+        }
+        .article-meta h1 {
+            font-size: 22px;
+            font-weight: bold;
+            color: #1a1a1a;
+            line-height: 1.4;
+            margin-bottom: 12px;
+            text-align: left;
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+        .article-meta .meta-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: #999;
+        }
+        .article-meta .author-name {
+            color: #576b95;
+        }
+        /* 公众号内容样式 */
+        .rich_media_content {
+            font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue",
+                "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI",
+                "Microsoft YaHei", Arial, sans-serif;
+            font-size: 16px;
+            color: #333;
+            line-height: 1.8;
+            letter-spacing: 0.5px;
+            padding: 0 16px 20px;
+        }
+        .rich_media_content h1 {
+            font-size: 22px;
+            font-weight: bold;
+            color: #1a1a1a;
+            text-align: center;
+            margin: 30px 0 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e8e8e8;
+        }
+        .rich_media_content h2 {
+            font-size: 19px;
+            font-weight: bold;
+            color: #2c2c2c;
+            margin: 28px 0 16px;
+            padding-left: 12px;
+            border-left: 4px solid #4a90d9;
+        }
+        .rich_media_content h3 {
+            font-size: 17px;
+            font-weight: bold;
+            color: #3c3c3c;
+            margin: 20px 0 12px;
+        }
+        .rich_media_content p {
+            margin: 12px 0;
+            text-align: justify;
+            text-indent: 0;
+        }
+        .rich_media_content blockquote {
+            margin: 16px 0;
+            padding: 12px 16px;
+            background: #f7f7f7;
+            border-left: 4px solid #4a90d9;
+            border-radius: 0 4px 4px 0;
+            color: #555;
+            font-size: 15px;
+        }
+        .rich_media_content blockquote p { margin: 4px 0; }
+        .rich_media_content strong { color: #1a1a1a; font-weight: bold; }
+        .rich_media_content em { color: #555; font-style: italic; }
+        .rich_media_content ul, .rich_media_content ol { margin: 12px 0; padding-left: 24px; }
+        .rich_media_content li { margin: 6px 0; line-height: 1.8; }
+        .rich_media_content hr {
+            border: none;
+            height: 1px;
+            background: linear-gradient(to right, transparent, #ccc, transparent);
+            margin: 24px 0;
+        }
+        .rich_media_content code {
+            background: #f0f0f0;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 14px;
+            font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+            color: #c7254e;
+        }
+        .rich_media_content pre {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 16px;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin: 16px 0;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        .rich_media_content pre code { background: transparent; color: inherit; padding: 0; }
+        .rich_media_content img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 6px;
+            margin: 16px auto;
+            display: block;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        .rich_media_content .drop-cap::first-letter {
+            font-size: 2.4em;
+            float: left;
+            line-height: 1;
+            margin: 0 6px 0 0;
+            color: #4a90d9;
+            font-weight: bold;
+        }
+        /* 操作提示区 */
+        .tips-panel {
+            flex: 1;
+            background: #fff;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            align-self: flex-start;
+            max-width: 500px;
+        }
+        .tips-panel h2 {
+            font-size: 18px;
+            color: #1a1a1a;
+            margin-bottom: 16px;
+            padding-left: 0;
+            border-left: none;
+        }
+        .tips-panel .tip-item {
+            margin-bottom: 16px;
+            padding: 12px 16px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        .tips-panel .tip-item .tip-title {
+            font-weight: bold;
+            color: #4a90d9;
+            margin-bottom: 6px;
+            font-size: 14px;
+        }
+        .tips-panel .tip-item .tip-desc {
+            font-size: 13px;
+            color: #666;
+            line-height: 1.6;
+        }
+        .copy-btn {
+            display: inline-block;
+            background: #4a90d9;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            margin-top: 12px;
+        }
+        .copy-btn:hover {
+            background: #357abd;
+        }
+        @media (max-width: 768px) {
+            .preview-container {
+                flex-direction: column;
+                align-items: center;
+            }
+            .tips-panel {
+                max-width: 375px;
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="preview-container">
+        <!-- 手机预览 -->
+        <div class="phone-frame">
+            <div class="phone-header">
+                <span class="back-btn">&lt;</span>
+                <span class="title-bar">公众号文章</span>
+                <span style="width:18px"></span>
+            </div>
+            <div class="phone-content">
+                <div class="article-meta">
+                    <h1>【测试】情感赛道：今日话题</h1>
+                    <div class="meta-info">
+                        <span class="author-name">公众号名称</span>
+                        <span>2026-04-26</span>
+                    </div>
+                </div>
+                <div class="rich_media_content" id="article-content">
+                    
+
+<style>
+  /* 全局 */
+  .rich_media_content {
+    font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue",
+      "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI",
+      "Microsoft YaHei", Arial, sans-serif;
+    font-size: 16px;
+    color: #333;
+    line-height: 1.8;
+    letter-spacing: 0.5px;
+    padding: 0 8px;
+  }
+
+  /* 标题 */
+  h1 {
+    font-size: 22px;
+    font-weight: bold;
+    color: #1a1a1a;
+    text-align: center;
+    margin: 30px 0 20px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #e8e8e8;
+  }
+
+  h2 {
+    font-size: 19px;
+    font-weight: bold;
+    color: #2c2c2c;
+    margin: 28px 0 16px;
+    padding-left: 12px;
+    border-left: 4px solid #4a90d9;
+  }
+
+  h3 {
+    font-size: 17px;
+    font-weight: bold;
+    color: #3c3c3c;
+    margin: 20px 0 12px;
+  }
+
+  /* 正文段落 */
+  p {
+    margin: 12px 0;
+    text-align: justify;
+    text-indent: 0;
+  }
+
+  /* 引用块 */
+  blockquote {
+    margin: 16px 0;
+    padding: 12px 16px;
+    background: #f7f7f7;
+    border-left: 4px solid #4a90d9;
+    border-radius: 0 4px 4px 0;
+    color: #555;
+    font-size: 15px;
+  }
+
+  blockquote p {
+    margin: 4px 0;
+  }
+
+  /* 粗体 */
+  strong {
+    color: #1a1a1a;
+    font-weight: bold;
+  }
+
+  /* 斜体 */
+  em {
+    color: #555;
+    font-style: italic;
+  }
+
+  /* 列表 */
+  ul, ol {
+    margin: 12px 0;
+    padding-left: 24px;
+  }
+
+  li {
+    margin: 6px 0;
+    line-height: 1.8;
+  }
+
+  /* 分隔线 */
+  hr {
+    border: none;
+    height: 1px;
+    background: linear-gradient(to right, transparent, #ccc, transparent);
+    margin: 24px 0;
+  }
+
+  /* 代码 */
+  code {
+    background: #f0f0f0;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 14px;
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    color: #c7254e;
+  }
+
+  pre {
+    background: #2d2d2d;
+    color: #f8f8f2;
+    padding: 16px;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin: 16px 0;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  pre code {
+    background: transparent;
+    color: inherit;
+    padding: 0;
+  }
+
+  /* 图片 */
+  img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 6px;
+    margin: 16px auto;
+    display: block;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  }
+
+  /* 图片说明 */
+  figcaption, .img-caption {
+    text-align: center;
+    font-size: 13px;
+    color: #999;
+    margin-top: 6px;
+  }
+
+  /* 首字下沉 */
+  .drop-cap::first-letter {
+    font-size: 2.4em;
+    float: left;
+    line-height: 1;
+    margin: 0 6px 0 0;
+    color: #4a90d9;
+    font-weight: bold;
+  }
+</style>
+
+<h1>【测试】情感赛道：今日话题</h1>
+<p class="drop-cap">这是测试内容，用于验证流程。这是测试内容，用于验证流程。这是测试内容，用于验证流程。这是测试内容，用于验证流程。这是测试内容，用于验证流程。这是测试内容，用于验证流程。这是测试内容，用于验证流程。这是测试内容，用于验证流程。这是测试内容，用于验证流程。这是测试内容，用于验证流程。这是测试内容，用于验证流程。这是测试内容，用于验证流程。这是测试内容，用于验证流程。这是测试内容，用于验证流程。这是测试内容，用于验证流程。这是测试内容，用于验证流程。这是测试内容，用于验证流程。这是测试内容，用于验证流程。这是测试内容，用于验证流程。这是测试内容，用于验证流程。这是测试内容，用于验证流程。这是测试内容，用于验证流程。这是测试内容，用于验证流程。这是测试内容，用于验证流程。这是测试内容，用于验证流程。这是测试内容，用于验证流程。这是测试内容，用于验证流程。这是测试内容，用于验证流程。这是测试内容，用于验证流程。这是测试内容，用于验证流程。这是测试内容，用于验证流程。这是测试内容，用于验证流程。这是测试内容，用于验证流程。这是测试内容，用于验证流程。这是测试内容，用于验证流程。这是测试内容，用于验证流程。这是测试内容，用于验证流程。这是测试内容，用于验证流程。这是测试内容，用于验证流程。这是测试内容，用于验证流程。这是测试内容，用于验证流程。这是测试内容，用于验证流程。这是测试内容，用于验证流程。这是测试内容，用于验证流程。这是测试内容，用于验证流程。这是测试内容，用于验证流程。这是测试内容，用于验证流程。这是测试内容，用于验证流程。这是测试内容，用于验证流程。这是测试内容，用于验证流程。</p>
+
+                </div>
+            </div>
+        </div>
+        <!-- 操作提示 -->
+        <div class="tips-panel">
+            <h2>如何使用这篇文章</h2>
+            <div class="tip-item">
+                <div class="tip-title">方式一：直接复制到公众号编辑器</div>
+                <div class="tip-desc">
+                    打开微信公众号后台 → 新建图文 → 切换到HTML模式 → 粘贴 article_content.html 的内容
+                </div>
+            </div>
+            <div class="tip-item">
+                <div class="tip-title">方式二：复制纯内容</div>
+                <div class="tip-desc">
+                    点击下方按钮复制文章内容，然后在公众号编辑器中直接粘贴
+                </div>
+                <button class="copy-btn" onclick="copyContent()">复制文章内容</button>
+            </div>
+            <div class="tip-item">
+                <div class="tip-title">方式三：使用 article_content.html</div>
+                <div class="tip-desc">
+                    同目录下的 article_content.html 包含纯排版内容（无预览框架），适合直接导入编辑器
+                </div>
+            </div>
+            <div class="tip-item">
+                <div class="tip-title">图片说明</div>
+                <div class="tip-desc">
+                    封面图和插图均为本地路径，粘贴到公众号编辑器后需要手动上传替换图片。<br>
+                    图片文件在同目录下：cover.jpg、inline_1.jpg、inline_2.jpg
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        function copyContent() {
+            var content = document.getElementById('article-content');
+            var range = document.createRange();
+            range.selectNodeContents(content);
+            var selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(range);
+            try {
+                document.execCommand('copy');
+                var btn = document.querySelector('.copy-btn');
+                btn.textContent = '已复制!';
+                btn.style.background = '#52c41a';
+                setTimeout(function() {
+                    btn.textContent = '复制文章内容';
+                    btn.style.background = '#4a90d9';
+                }, 2000);
+            } catch(e) {
+                alert('复制失败，请手动选中内容后复制');
+            }
+            selection.removeAllRanges();
+        }
+    </script>
+</body>
+</html>
