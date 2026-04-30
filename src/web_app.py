@@ -492,53 +492,127 @@ def get_generation_status():
 
 @app.post("/api/update")
 def self_update():
-    """从GitHub拉取最新代码并更新（保留.env和output）"""
+    """从GitHub拉取最新代码并更新（保留.env和output）
+    支持GitHub镜像加速，国内服务器也可正常更新
+    """
     import urllib.request
     import zipfile
 
-    zip_url = "https://github.com/iamzhangg/wxarticle/archive/refs/heads/main.zip"
+    # GitHub直连 + 国内镜像，按顺序尝试
+    zip_urls = [
+        "https://ghfast.top/https://github.com/iamzhangg/wxarticle/archive/refs/heads/master.zip",
+        "https://ghproxy.net/https://github.com/iamzhangg/wxarticle/archive/refs/heads/master.zip",
+        "https://github.com/iamzhangg/wxarticle/archive/refs/heads/master.zip",
+    ]
     zip_path = PROJECT_ROOT / "_update.zip"
     extract_dir = PROJECT_ROOT / "_update_tmp"
 
     try:
-        # 下载
-        urllib.request.urlretrieve(zip_url, str(zip_path))
+        # 下载（尝试多个镜像）
+        downloaded = False
+        last_err = None
+        for url in zip_urls:
+            try:
+                urllib.request.urlretrieve(url, str(zip_path))
+                # 验证文件大小
+                if zip_path.stat().st_size > 1000:
+                    downloaded = True
+                    break
+                else:
+                    zip_path.unlink(missing_ok=True)
+            except Exception as e:
+                last_err = e
+                zip_path.unlink(missing_ok=True)
+                continue
+
+        if not downloaded:
+            return {"status": "error", "message": f"所有下载源均失败: {last_err}"}
 
         # 解压
         with zipfile.ZipFile(str(zip_path), "r") as z:
             z.extractall(str(extract_dir))
 
-        # 找到解压后的目录
-        inner = extract_dir / "wxarticle-main"
-        if not inner.exists():
+        # 找到解压后的目录（master分支解压后为wxarticle-master）
+        inner = None
+        for name in ["wxarticle-master", "wxarticle-main"]:
+            if (extract_dir / name).exists():
+                inner = extract_dir / name
+                break
+        if not inner:
             for d in extract_dir.iterdir():
                 if d.is_dir():
                     inner = d
                     break
 
+        if not inner:
+            return {"status": "error", "message": "解压后未找到项目目录"}
+
         # 复制关键目录和文件（保留 .env、output、venv）
-        for item in ["src", "tracks", "config.yaml", "start_web.py", "requirements.txt"]:
+        for item in ["src", "tracks", "assets", "config.yaml", "start_web.py", "requirements.txt", "README.md", ".env.example"]:
             src = inner / item
             dst = PROJECT_ROOT / item
-            if src.is_dir():
-                if dst.exists():
-                    shutil.rmtree(str(dst))
-                shutil.copytree(str(src), str(dst))
-            elif src.is_file():
-                shutil.copy2(str(src), str(dst))
+            if src.exists():
+                if src.is_dir():
+                    if dst.exists():
+                        shutil.rmtree(str(dst))
+                    shutil.copytree(str(src), str(dst))
+                elif src.is_file():
+                    shutil.copy2(str(src), str(dst))
+
+        # 安装新依赖（如果有变化）
+        try:
+            import subprocess
+            pip_path = PROJECT_ROOT / "venv" / "Scripts" / "pip.exe"
+            if pip_path.exists():
+                subprocess.run(
+                    [str(pip_path), "install", "-r", str(PROJECT_ROOT / "requirements.txt")],
+                    capture_output=True, timeout=120
+                )
+        except Exception:
+            pass  # 依赖安装失败不阻塞更新
 
         # 清理
         zip_path.unlink(missing_ok=True)
         if extract_dir.exists():
             shutil.rmtree(str(extract_dir))
 
-        return {"status": "ok", "message": "更新成功，请重启服务生效"}
+        return {"status": "ok", "message": "更新成功，正在自动重启服务..."}
     except Exception as e:
         # 清理
         zip_path.unlink(missing_ok=True)
         if extract_dir.exists():
             shutil.rmtree(str(extract_dir))
         return {"status": "error", "message": f"更新失败: {e}"}
+
+
+@app.post("/api/restart")
+def restart_service():
+    """重启wxarticle服务（通过启动新进程后退出当前进程）"""
+    import subprocess
+
+    try:
+        # 启动新进程
+        python = sys.executable
+        script = PROJECT_ROOT / "start_web.py"
+
+        kwargs = {}
+        if sys.platform == "win32":
+            kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
+
+        subprocess.Popen(
+            [python, str(script)],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            **kwargs
+        )
+
+        # 延迟退出当前进程，确保新进程启动
+        threading.Timer(1.0, lambda: os._exit(0)).start()
+
+        return {"status": "ok", "message": "重启中..."}
+    except Exception as e:
+        return {"status": "error", "message": f"重启失败: {e}"}
 
 
 @app.delete("/api/articles/{date}/{track_dir}")
