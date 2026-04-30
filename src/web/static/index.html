@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>wxarticle 控制台</title>
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-light: #818cf8;
+            --primary-dark: #4f46e5;
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --text: #1e293b;
+            --text-secondary: #64748b;
+            --border: #e2e8f0;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --radius: 12px;
+            --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+            --shadow-md: 0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.06);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        /* 顶部导航 */
+        .navbar {
+            background: var(--card);
+            border-bottom: 1px solid var(--border);
+            padding: 0 24px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: var(--shadow);
+        }
+
+        .navbar-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text);
+        }
+
+        .navbar-brand .logo {
+            width: 32px; height: 32px;
+            background: linear-gradient(135deg, var(--primary), var(--primary-light));
+            border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            color: white; font-size: 16px;
+        }
+
+        .navbar-nav { display: flex; gap: 4px; }
+
+        .nav-btn {
+            padding: 8px 16px; border: none; background: transparent;
+            color: var(--text-secondary); font-size: 14px; font-weight: 500;
+            cursor: pointer; border-radius: 8px; transition: all 0.2s;
+        }
+        .nav-btn:hover { background: var(--bg); color: var(--text); }
+        .nav-btn.active { background: var(--primary); color: white; }
+
+        .navbar-actions { display: flex; align-items: center; gap: 8px; }
+
+        /* 生成按钮组 */
+        .gen-btn-group {
+            display: flex; gap: 4px; align-items: center;
+        }
+        .gen-btn-main {
+            padding: 8px 16px; border: none; border-radius: 8px;
+            font-size: 14px; font-weight: 500; cursor: pointer;
+            background: var(--primary); color: white; transition: all 0.2s;
+            display: flex; align-items: center; gap: 6px;
+        }
+        .gen-btn-main:hover { background: var(--primary-dark); }
+        .gen-btn-main:disabled { background: var(--text-secondary); cursor: not-allowed; }
+        .gen-btn-dropdown {
+            padding: 8px 6px; border: none; border-radius: 8px;
+            font-size: 14px; cursor: pointer;
+            background: var(--primary-dark); color: white; transition: all 0.2s;
+        }
+        .gen-btn-dropdown:hover { background: #4338ca; }
+
+        .dropdown-menu {
+            position: absolute; top: 52px; right: 0;
+            background: var(--card); border: 1px solid var(--border);
+            border-radius: 8px; box-shadow: var(--shadow-md);
+            min-width: 160px; z-index: 200; display: none; overflow: hidden;
+        }
+        .dropdown-menu.show { display: block; }
+        .dropdown-item {
+            padding: 10px 16px; font-size: 14px; cursor: pointer;
+            display: flex; align-items: center; gap: 8px; transition: background 0.2s;
+        }
+        .dropdown-item:hover { background: var(--bg); }
+
+        /* 按钮 */
+        .btn {
+            padding: 8px 16px; border: none; border-radius: 8px;
+            font-size: 14px; font-weight: 500; cursor: pointer;
+            transition: all 0.2s; display: inline-flex; align-items: center; gap: 6px;
+        }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { background: var(--primary-dark); }
+        .btn-primary:disabled { background: var(--text-secondary); cursor: not-allowed; }
+        .btn-outline { background: transparent; color: var(--primary); border: 1px solid var(--primary); }
+        .btn-outline:hover { background: var(--primary); color: white; }
+        .btn-success { background: var(--success); color: white; }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-sm { padding: 4px 10px; font-size: 12px; }
+        .btn-ghost { background: transparent; color: var(--text-secondary); padding: 6px 8px; }
+        .btn-ghost:hover { background: var(--bg); color: var(--text); }
+
+        /* 主内容 */
+        .main-content { max-width: 1200px; margin: 0 auto; padding: 24px; }
+
+        /* 文章卡片 */
+        .article-card {
+            background: var(--card); border: 1px solid var(--border);
+            border-radius: var(--radius); padding: 16px 20px; margin-bottom: 10px;
+            display: flex; align-items: center; gap: 16px;
+            transition: all 0.2s; box-shadow: var(--shadow);
+        }
+        .article-card:hover { box-shadow: var(--shadow-md); border-color: var(--primary-light); }
+        .article-card.generating { border-color: #f59e0b; background: #fffbeb; }
+        .article-card.generating:hover { border-color: #f59e0b; }
+        .article-card.failed { border-color: #ef4444; background: #fef2f2; }
+        .article-card.failed:hover { border-color: #ef4444; }
+        @keyframes pulse-dot { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+        .generating-dot { display: inline-block; animation: pulse-dot 1.2s infinite; }
+
+        .article-track-badge {
+            flex-shrink: 0; padding: 4px 12px; border-radius: 20px;
+            font-size: 12px; font-weight: 600; min-width: 80px; text-align: center;
+        }
+        .track-感悟赛道 { background: #fce7f3; color: #be185d; }
+        .track-情感赛道 { background: #fce7f3; color: #be185d; }
+        .track-AI赛道 { background: #dbeafe; color: #1d4ed8; }
+        .track-人物赛道 { background: #ede9fe; color: #7c3aed; }
+        .track-生活赛道 { background: #dcfce7; color: #16a34a; }
+        .track-高校赛道 { background: #fef3c7; color: #b45309; }
+
+        .article-info { flex: 1; min-width: 0; }
+        .article-title {
+            font-size: 15px; font-weight: 600; margin-bottom: 4px;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .article-summary {
+            font-size: 13px; color: var(--text-secondary);
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .article-topic-reason {
+            font-size: 12px; color: #8b5cf6; margin-top: 4px;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .article-meta {
+            font-size: 12px; color: var(--text-secondary); margin-top: 4px;
+            display: flex; gap: 12px;
+        }
+
+        .article-actions { display: flex; gap: 6px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
+
+        /* 设置页面 */
+        .settings-section { margin-bottom: 24px; }
+        .settings-section h3 {
+            font-size: 15px; font-weight: 600; margin-bottom: 12px;
+            padding-bottom: 8px; border-bottom: 1px solid var(--border);
+        }
+        .setting-row {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 12px 0; border-bottom: 1px solid #f1f5f9;
+        }
+        .setting-row:last-child { border-bottom: none; }
+        .setting-label { font-size: 14px; font-weight: 500; }
+        .setting-desc { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+
+        /* 开关 */
+        .toggle { position: relative; width: 44px; height: 24px; cursor: pointer; }
+        .toggle input { display: none; }
+        .toggle-slider {
+            position: absolute; inset: 0; background: #cbd5e1;
+            border-radius: 24px; transition: 0.3s;
+        }
+        .toggle-slider::before {
+            content: ''; position: absolute; height: 18px; width: 18px;
+            left: 3px; bottom: 3px; background: white; border-radius: 50%; transition: 0.3s;
+        }
+        .toggle input:checked + .toggle-slider { background: var(--primary); }
+        .toggle input:checked + .toggle-slider::before { transform: translateX(20px); }
+
+        /* 数字输入 */
+        .number-input { display: flex; align-items: center; gap: 8px; }
+        .number-input button {
+            width: 28px; height: 28px; border: 1px solid var(--border);
+            background: var(--card); border-radius: 6px; cursor: pointer;
+            font-size: 16px; display: flex; align-items: center; justify-content: center;
+        }
+        .number-input button:hover { background: var(--bg); }
+        .number-input input {
+            width: 40px; text-align: center; border: 1px solid var(--border);
+            border-radius: 6px; padding: 4px; font-size: 14px;
+        }
+
+        /* 时间输入 */
+        .time-input { padding: 6px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; }
+
+        /* Toast */
+        .toast-container { position: fixed; top: 72px; right: 24px; z-index: 1000; }
+        .toast {
+            background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+            padding: 12px 16px; margin-bottom: 8px; box-shadow: var(--shadow-md);
+            display: flex; align-items: center; gap: 8px; font-size: 14px;
+            animation: slideIn 0.3s ease;
+        }
+        .toast.success { border-left: 3px solid var(--success); }
+        .toast.error { border-left: 3px solid var(--danger); }
+        .toast.info { border-left: 3px solid var(--primary); }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        /* 弹窗 */
+        .modal-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+            z-index: 200; display: flex; align-items: center; justify-content: center;
+        }
+        .modal {
+            background: var(--card); border-radius: var(--radius);
+            width: 90%; max-width: 800px; max-height: 90vh;
+            overflow: hidden; display: flex; flex-direction: column;
+        }
+        .modal-header {
+            padding: 16px 20px; border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .modal-body { padding: 20px; overflow-y: auto; flex: 1; }
+        .modal-footer {
+            padding: 12px 20px; border-top: 1px solid var(--border);
+            display: flex; justify-content: flex-end; gap: 8px;
+        }
+
+        /* 空状态 */
+        .empty-state { text-align: center; padding: 60px 20px; color: var(--text-secondary); }
+        .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+        .empty-state h3 { font-size: 16px; margin-bottom: 8px; color: var(--text); }
+        .empty-state p { font-size: 14px; }
+
+        /* 赛道筛选栏 */
+        .filter-bar {
+            display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; align-items: center;
+        }
+        .filter-btn {
+            padding: 6px 14px; border: 1px solid var(--border); border-radius: 20px;
+            background: var(--card); font-size: 13px; cursor: pointer; transition: all 0.2s;
+        }
+        .filter-btn:hover { border-color: var(--primary-light); }
+        .filter-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
+
+        .card { background: var(--card); border-radius: var(--radius); border: 1px solid var(--border); box-shadow: var(--shadow); overflow: hidden; }
+        .card-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+        .card-header h2 { font-size: 16px; font-weight: 600; }
+        .card-body { padding: 20px; }
+
+        /* 响应式 */
+        @media (max-width: 768px) {
+            .main-content { padding: 16px; }
+            .article-card { flex-direction: column; align-items: flex-start; }
+            .article-actions { width: 100%; justify-content: flex-start; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- 导航栏 -->
+<nav class="navbar">
+    <div class="navbar-brand">
+        <div class="logo">W</div>
+        <span>wxarticle</span>
+    </div>
+    <div class="navbar-nav">
+        <button class="nav-btn active" onclick="showPage('dashboard')">文章仓库</button>
+        <button class="nav-btn" onclick="showPage('settings')">设置</button>
+    </div>
+    <div class="navbar-actions" style="position: relative;">
+        <div class="gen-btn-group">
+            <button class="gen-btn-main" id="generateBtn" onclick="triggerGenerate('')">
+                生成
+            </button>
+            <button class="gen-btn-dropdown" onclick="toggleGenMenu()">▼</button>
+        </div>
+        <div class="dropdown-menu" id="genMenu"></div>
+    </div>
+</nav>
+
+<!-- Toast -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- 主内容 -->
+<div class="main-content">
+    <!-- 仓库页面 -->
+    <div id="dashboardPage">
+        <div class="filter-bar" id="filterBar"></div>
+        <div id="articleList"></div>
+    </div>
+
+    <!-- 设置页面 -->
+    <div id="settingsPage" style="display:none;">
+        <div class="card" style="margin-bottom: 20px;">
+            <div class="card-header"><h2>赛道设置</h2></div>
+            <div class="card-body" id="trackSettings"></div>
+        </div>
+        <div class="card" style="margin-bottom: 20px;">
+            <div class="card-header"><h2>定时设置</h2></div>
+            <div class="card-body" id="scheduleSettings"></div>
+        </div>
+        <div class="card" style="margin-bottom: 20px;">
+            <div class="card-header"><h2>生成设置</h2></div>
+            <div class="card-body" id="generationSettings"></div>
+        </div>
+        <div style="text-align: right;">
+            <button class="btn btn-primary" onclick="saveSettings()">保存设置</button>
+        </div>
+    </div>
+</div>
+
+<!-- 预览弹窗 -->
+<div id="previewModal" class="modal-overlay" style="display:none;" onclick="closePreview(event)">
+    <div class="modal">
+        <div class="modal-header">
+            <h2 id="previewTitle">文章预览</h2>
+            <button class="btn-ghost" onclick="closePreview()">X</button>
+        </div>
+        <div class="modal-body" id="previewBody"></div>
+        <div class="modal-footer" id="previewFooter"></div>
+    </div>
+</div>
+
+<script>
+    // ============ 全局状态 ============
+    let currentPage = 'dashboard';
+    let currentSettings = null;
+    let currentFilter = 'all'; // 赛道筛选
+    let allArticles = [];
+
+    // ============ 通用复制（兼容HTTP） ============
+    function formatTime(isoStr) {
+        if (!isoStr) return '';
+        try {
+            const d = new Date(isoStr);
+            const now = new Date();
+            const today = now.toISOString().slice(0, 10);
+            const day = isoStr.slice(0, 10);
+            const time = isoStr.slice(11, 16);
+            if (day === today) return '今天 ' + time;
+            return day + ' ' + time;
+        } catch { return ''; }
+    }
+    function copyToClipboard(text) {
+        // 优先用 Clipboard API（HTTPS/localhost）
+        if (navigator.clipboard && window.isSecureContext) {
+            return navigator.clipboard.writeText(text);
+        }
+        // HTTP 降级方案：创建临时 textarea
+        return new Promise((resolve, reject) => {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px;';
+            document.body.appendChild(ta);
+            ta.select();
+            try {
+                document.execCommand('copy');
+                resolve();
+            } catch (e) {
+                reject(e);
+            } finally {
+                document.body.removeChild(ta);
+            }
+        });
+    }
+
+    // ============ 页面切换 ============
+    function showPage(page) {
+        currentPage = page;
+        document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
+        event.target.classList.add('active');
+        document.getElementById('dashboardPage').style.display = page === 'dashboard' ? '' : 'none';
+        document.getElementById('settingsPage').style.display = page === 'settings' ? '' : 'none';
+        if (page === 'dashboard') loadArticles();
+        if (page === 'settings') loadSettings();
+    }
+
+    // ============ 文章列表 ============
+    async function loadArticles() {
+        try {
+            const resp = await fetch('/api/articles');
+            const data = await resp.json();
+            allArticles = data.articles || [];
+            renderFilterBar();
+            renderArticles();
+        } catch (e) {
+            document.getElementById('articleList').innerHTML = `
+                <div class="empty-state"><div class="icon">!</div>
+                <h3>加载失败</h3><p>${e.message}</p></div>`;
+        }
+    }
+
+    function renderFilterBar() {
+        // 收集赛道列表
+        const tracks = [...new Set(allArticles.map(a => a.track))];
+        const settings = currentSettings;
+        const allTracks = settings ? settings.tracks.map(t => t.name) : tracks;
+
+        let html = `<button class="filter-btn ${currentFilter === 'all' ? 'active' : ''}"
+                     onclick="setFilter('all')">全部</button>`;
+        for (const track of allTracks) {
+            html += `<button class="filter-btn ${currentFilter === track ? 'active' : ''}"
+                      onclick="setFilter('${track}')">${track}</button>`;
+        }
+        document.getElementById('filterBar').innerHTML = html;
+    }
+
+    function setFilter(filter) {
+        currentFilter = filter;
+        renderFilterBar();
+        renderArticles();
+    }
+
+    function renderArticles() {
+        const filtered = currentFilter === 'all'
+            ? allArticles
+            : allArticles.filter(a => a.track === currentFilter);
+
+        if (filtered.length === 0) {
+            document.getElementById('articleList').innerHTML = `
+                <div class="empty-state"><div class="icon">W</div>
+                <h3>还没有文章</h3><p>点击右上角「生成」开始创作</p></div>`;
+            return;
+        }
+
+        let html = '';
+        for (const article of filtered) {
+            const trackClass = `track-${article.track}`;
+            const isGenerating = article.status === 'generating';
+            const isFailed = article.status === 'failed';
+
+            html += `
+            <div class="article-card ${isGenerating ? 'generating' : ''} ${isFailed ? 'failed' : ''}">
+                <span class="article-track-badge ${trackClass}">${article.track}</span>
+                <div class="article-info">
+                    <div class="article-title">${isGenerating ? '<span class="generating-dot">⏳</span> ' : ''}${isFailed ? '❌ ' : ''}${article.title || '未命名'}</div>
+                    <div class="article-summary">${article.summary || '暂无简介'}</div>
+                    ${!isGenerating && !isFailed && article.topic_reason ? `<div class="article-topic-reason" title="${article.topic_source || ''}">💡 ${article.topic_reason}</div>` : ''}
+                    <div class="article-meta">
+                        ${!isGenerating && !isFailed ? `<span>${article.word_count || 0} 字</span>` : ''}
+                        <span>${formatTime(article.generated_at)}</span>
+                        ${isGenerating ? '<span style="color:#f59e0b;font-weight:600;">生成中...</span>' : ''}
+                        ${isFailed ? '<span style="color:#ef4444;font-weight:600;">生成失败</span>' : ''}
+                    </div>
+                </div>
+                <div class="article-actions">
+                    ${!isGenerating && !isFailed && article.has_html ? `<button class="btn btn-sm btn-primary" onclick="copyHtml('${article.id}', this)">复制</button>` : ''}
+                    ${!isGenerating && !isFailed ? `<button class="btn btn-sm btn-outline" onclick="copySummary('${article.id}', this)" title="复制简介">简介</button>` : ''}
+                    ${!isGenerating && !isFailed ? `<button class="btn btn-sm btn-outline" onclick="previewArticle('${article.id}')">预览</button>` : ''}
+                    ${isFailed ? `<button class="btn btn-sm btn-primary" onclick="retryGenerate('${article.track}')">重试</button>` : ''}
+                    <button class="btn btn-sm btn-ghost" onclick="deleteArticle('${article.id}')" title="删除">X</button>
+                </div>
+            </div>`;
+        }
+        document.getElementById('articleList').innerHTML = html;
+    }
+
+    // ============ 生成菜单 ============
+    async function loadGenMenu() {
+        try {
+            const resp = await fetch('/api/settings');
+            const data = await resp.json();
+            let html = `<div class="dropdown-item" onclick="triggerGenerate('')">所有已启用赛道</div>`;
+            for (const track of data.tracks) {
+                if (track.enabled) {
+                    html += `<div class="dropdown-item" onclick="triggerGenerate('${track.name}')">
+                        <span class="article-track-badge track-${track.name}" style="font-size:11px;padding:2px 8px;">${track.name}</span>
+                    </div>`;
+                }
+            }
+            document.getElementById('genMenu').innerHTML = html;
+        } catch (e) {}
+    }
+
+    function toggleGenMenu() {
+        const menu = document.getElementById('genMenu');
+        menu.classList.toggle('show');
+        if (menu.classList.contains('show')) loadGenMenu();
+    }
+
+    // 点击其他区域关闭菜单
+    document.addEventListener('click', (e) => {
+        const menu = document.getElementById('genMenu');
+        if (!e.target.closest('.gen-btn-group') && !e.target.closest('.gen-btn-dropdown')) {
+            menu.classList.remove('show');
+        }
+    });
+
+    // ============ 复制排版HTML（富文本，可直接粘贴到微信编辑器） ============
+    async function copyHtml(articleId, btnEl) {
+        const origText = btnEl ? btnEl.textContent : '';
+        if (btnEl) { btnEl.disabled = true; btnEl.textContent = '复制中...'; }
+        try {
+            const resp = await fetch(`/api/articles/${articleId}`);
+            const data = await resp.json();
+            const htmlContent = data.html_content || '';
+            if (!htmlContent) { showToast('暂无HTML内容', 'info'); return; }
+
+            // 创建临时DOM，选中内容后复制为富文本
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = htmlContent;
+            tempDiv.style.cssText = 'position:fixed;left:-9999px;top:-9999px;';
+            document.body.appendChild(tempDiv);
+
+            const range = document.createRange();
+            range.selectNodeContents(tempDiv);
+            const selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(range);
+
+            try {
+                document.execCommand('copy');
+                showToast('已复制！可直接粘贴到微信公众号编辑器', 'success');
+            } catch (e) {
+                showToast('复制失败，请手动操作', 'error');
+            } finally {
+                selection.removeAllRanges();
+                document.body.removeChild(tempDiv);
+            }
+        } catch (e) {
+            showToast('复制失败: ' + e.message, 'error');
+        } finally {
+            if (btnEl) { btnEl.disabled = false; btnEl.textContent = origText || '复制'; }
+        }
+    }
+
+    // ============ 复制简介 ============
+    async function copySummary(articleId, btnEl) {
+        const origText = btnEl ? btnEl.textContent : '';
+        if (btnEl) { btnEl.disabled = true; btnEl.textContent = '复制中...'; }
+        try {
+            const resp = await fetch(`/api/articles/${articleId}`);
+            const data = await resp.json();
+            const summary = data.meta?.summary || '';
+            if (!summary) { showToast('暂无简介', 'info'); return; }
+            await copyToClipboard(summary);
+            showToast('简介已复制到剪贴板', 'success');
+        } catch (e) {
+            showToast('复制失败: ' + e.message, 'error');
+        } finally {
+            if (btnEl) { btnEl.disabled = false; btnEl.textContent = origText || '简介'; }
+        }
+    }
+
+    // ============ 预览 ============
+    async function previewArticle(articleId) {
+        try {
+            const resp = await fetch(`/api/articles/${articleId}`);
+            const data = await resp.json();
+            document.getElementById('previewTitle').textContent = data.meta?.title || '文章预览';
+
+            let bodyHtml = '';
+            if (data.meta?.summary) {
+                bodyHtml += `
+                <div style="background: #f0f4ff; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; cursor: pointer;"
+                     onclick="copySummary('${articleId}')" title="点击复制简介">
+                    <div style="font-size: 12px; color: #6366f1; margin-bottom: 4px;">点击复制简介</div>
+                    <div style="font-size: 14px; color: #334155;">${data.meta.summary}</div>
+                </div>`;
+            }
+            if (data.html_content) {
+                // 去掉图片，只保留文本排版
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = data.html_content;
+                tempDiv.querySelectorAll('img').forEach(img => img.remove());
+                const textOnly = tempDiv.innerHTML;
+                bodyHtml += `
+                <div style="font-size: 15px; line-height: 1.8; color: #1e293b; max-height: 500px; overflow-y: auto; padding: 8px;">
+                    ${textOnly}
+                </div>`;
+            } else if (data.text_content) {
+                bodyHtml += `
+                <div style="font-size: 15px; line-height: 1.8; color: #1e293b; white-space: pre-wrap; max-height: 500px; overflow-y: auto; padding: 8px;">
+                    ${data.text_content}
+                </div>`;
+            }
+            document.getElementById('previewBody').innerHTML = bodyHtml;
+            document.getElementById('previewFooter').innerHTML = `
+                <button class="btn btn-primary" onclick="copyHtml('${articleId}', this)">复制到微信</button>
+                <button class="btn btn-success" onclick="copySummary('${articleId}', this)">复制简介</button>
+            `;
+            document.getElementById('previewModal').style.display = 'flex';
+        } catch (e) {
+            showToast('预览失败: ' + e.message, 'error');
+        }
+    }
+
+    function closePreview(event) {
+        if (!event || event.target === document.getElementById('previewModal')) {
+            document.getElementById('previewModal').style.display = 'none';
+        }
+    }
+
+    // ============ 删除 ============
+    async function deleteArticle(articleId) {
+        if (!confirm('确定要删除这篇文章吗？')) return;
+        try {
+            const resp = await fetch(`/api/articles/${articleId}`, { method: 'DELETE' });
+            if (resp.ok) { showToast('已删除', 'success'); loadArticles(); }
+        } catch (e) { showToast('删除失败', 'error'); }
+    }
+
+    // ============ 重试生成 ============
+    function retryGenerate(trackName) {
+        triggerGenerate(trackName);
+    }
+
+    // ============ 触发生成 ============
+    async function triggerGenerate(trackName) {
+        document.getElementById('genMenu').classList.remove('show');
+        const btn = document.getElementById('generateBtn');
+        btn.disabled = true;
+        btn.textContent = '生成中...';
+
+        try {
+            const url = `/api/generate?track_name=${encodeURIComponent(trackName)}`;
+            const resp = await fetch(url, { method: 'POST' });
+            const data = await resp.json();
+            if (data.status === 'already_running') {
+                showToast('已有生成任务在运行中', 'info');
+                btn.disabled = false; btn.textContent = '生成';
+            } else {
+                // 只显示实际要生成的赛道名
+                const tracks = data.tracks || [];
+                if (tracks.length > 0) {
+                    showToast(tracks.join('、') + ' 生成中', 'success');
+                } else {
+                    showToast('生成已启动', 'success');
+                }
+                pollGenerationStatus();
+            }
+        } catch (e) {
+            showToast('启动失败: ' + e.message, 'error');
+            btn.disabled = false; btn.textContent = '生成';
+        }
+    }
+
+    async function pollGenerationStatus(label) {
+        const btn = document.getElementById('generateBtn');
+        const poll = async () => {
+            try {
+                const resp = await fetch('/api/generate/status');
+                const status = await resp.json();
+                if (status.running) {
+                    btn.textContent = (status.progress || '生成中...').substring(0, 8);
+                    loadArticles(); // 刷新列表以显示生成中状态
+                    setTimeout(poll, 3000);
+                } else {
+                    btn.disabled = false;
+                    btn.textContent = '生成';
+                    if (status.progress.includes('完成')) {
+                        showToast('文章生成完成！', 'success');
+                    } else if (status.progress.includes('错误') || status.progress.includes('失败')) {
+                        showToast('生成失败: ' + status.progress, 'error');
+                    }
+                    loadArticles(); // 最终刷新列表
+                }
+            } catch (e) {
+                btn.disabled = false; btn.textContent = '生成';
+            }
+        };
+        poll();
+    }
+
+    // ============ 设置页面 ============
+    async function loadSettings() {
+        try {
+            const resp = await fetch('/api/settings');
+            currentSettings = await resp.json();
+            renderSettings(currentSettings);
+        } catch (e) { showToast('加载设置失败', 'error'); }
+    }
+
+    function renderSettings(settings) {
+        let trackHtml = '';
+        for (const track of settings.tracks) {
+            trackHtml += `
+            <div class="setting-row">
+                <div>
+                    <div class="setting-label">${track.name}</div>
+                    <div class="setting-desc">关键词：${track.keywords.join('、')}</div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 16px;">
+                    <div class="number-input">
+                        <span style="font-size: 12px; color: var(--text-secondary);">每日篇数</span>
+                        <button type="button" onclick="changeArticlesPerDay('${track.name}', -1)">-</button>
+                        <input type="text" id="articles_${track.name}" value="${track.articles_per_day}" readonly style="width: 32px; text-align: center; border: 1px solid var(--border); border-radius: 6px; padding: 4px; font-size: 14px; background: var(--card);">
+                        <button type="button" onclick="changeArticlesPerDay('${track.name}', 1)">+</button>
+                    </div>
+                    <label class="toggle">
+                        <input type="checkbox" id="enabled_${track.name}" ${track.enabled ? 'checked' : ''}
+                               onchange="toggleTrack('${track.name}', this.checked)">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+            </div>`;
+        }
+        document.getElementById('trackSettings').innerHTML = trackHtml;
+
+        const schedule = settings.schedule || {};
+        document.getElementById('scheduleSettings').innerHTML = `
+            <div class="setting-row">
+                <div>
+                    <div class="setting-label">每日生成时间</div>
+                    <div class="setting-desc">每天自动生成文章的时间</div>
+                </div>
+                <input type="time" class="time-input" id="scheduleTime" value="${schedule.time || '08:00'}">
+            </div>`;
+
+        const gen = settings.generation || {};
+        document.getElementById('generationSettings').innerHTML = `
+            <div class="setting-row">
+                <div>
+                    <div class="setting-label">图片来源</div>
+                    <div class="setting-desc">stock=图库搜索 / ai=AI生图 / auto=自动选择</div>
+                </div>
+                <select id="imageSource" style="padding: 6px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px;">
+                    <option value="stock" ${gen.image_source === 'stock' ? 'selected' : ''}>图库搜索</option>
+                    <option value="ai" ${gen.image_source === 'ai' ? 'selected' : ''}>AI生图</option>
+                    <option value="auto" ${gen.image_source === 'auto' ? 'selected' : ''}>自动选择</option>
+                </select>
+            </div>
+            <div class="setting-row">
+                <div>
+                    <div class="setting-label">字数范围</div>
+                    <div class="setting-desc">每篇文章的目标字数</div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <input type="number" id="wordMin" value="${gen.word_count_min || 1200}" min="500" max="8000"
+                           style="width: 70px; padding: 4px; border: 1px solid var(--border); border-radius: 6px; text-align: center;">
+                    <span>~</span>
+                    <input type="number" id="wordMax" value="${gen.word_count_max || 1300}" min="500" max="8000"
+                           style="width: 70px; padding: 4px; border: 1px solid var(--border); border-radius: 6px; text-align: center;">
+                </div>
+            </div>`;
+    }
+
+    function toggleTrack(trackName, enabled) {
+        if (currentSettings) {
+            const track = currentSettings.tracks.find(t => t.name === trackName);
+            if (track) track.enabled = enabled;
+        }
+    }
+
+    function changeArticlesPerDay(trackName, delta) {
+        const input = document.getElementById(`articles_${trackName}`);
+        let val = parseInt(input.value) + delta;
+        val = Math.max(1, Math.min(5, val));
+        input.value = val;
+        if (currentSettings) {
+            const track = currentSettings.tracks.find(t => t.name === trackName);
+            if (track) track.articles_per_day = val;
+        }
+    }
+
+    async function saveSettings() {
+        if (!currentSettings) return;
+        const settingsToUpdate = {
+            tracks: currentSettings.tracks.map(t => ({
+                name: t.name,
+                enabled: document.getElementById(`enabled_${t.name}`).checked,
+                articles_per_day: parseInt(document.getElementById(`articles_${t.name}`).value),
+            })),
+            schedule: { time: document.getElementById('scheduleTime').value },
+            generation: {
+                image_source: document.getElementById('imageSource').value,
+                word_count_min: parseInt(document.getElementById('wordMin').value),
+                word_count_max: parseInt(document.getElementById('wordMax').value),
+            },
+        };
+        try {
+            const resp = await fetch('/api/settings', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(settingsToUpdate),
+            });
+            const data = await resp.json();
+            showToast(data.status === 'ok' ? '设置已保存' : '保存失败', data.status === 'ok' ? 'success' : 'error');
+        } catch (e) { showToast('保存失败: ' + e.message, 'error'); }
+    }
+
+    // ============ Toast ============
+    function showToast(message, type = 'info') {
+        const container = document.getElementById('toastContainer');
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        toast.innerHTML = `<span>${message}</span>`;
+        container.appendChild(toast);
+        setTimeout(() => {
+            toast.style.opacity = '0'; toast.style.transform = 'translateX(100%)';
+            toast.style.transition = 'all 0.3s';
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
+    }
+
+    // ============ 初始化 ============
+    document.addEventListener('DOMContentLoaded', () => {
+        loadArticles();
+        loadSettings(); // 预加载设置用于筛选栏
+    });
+</script>
+</body>
+</html>

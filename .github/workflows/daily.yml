@@ -1,0 +1,60 @@
+name: wxarticle 每日生成
+
+on:
+  # 定时触发：每天UTC 00:00（北京时间08:00）
+  schedule:
+    - cron: '0 0 * * *'
+  # 支持手动触发
+  workflow_dispatch:
+    inputs:
+      track:
+        description: '指定赛道（留空=全部启用的赛道）'
+        required: false
+        default: ''
+      skip_search:
+        description: '跳过选题搜索'
+        type: boolean
+        default: false
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Generate articles
+        env:
+          SILICONFLOW_API_KEY: ${{ secrets.SILICONFLOW_API_KEY }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+          SMMS_TOKEN: ${{ secrets.SMMS_TOKEN }}
+        run: |
+          TRACK_ARG=""
+          if [ -n "${{ github.event.inputs.track }}" ]; then
+            TRACK_ARG="--track ${{ github.event.inputs.track }}"
+          fi
+          
+          SEARCH_ARG=""
+          if [ "${{ github.event.inputs.skip_search }}" = "true" ]; then
+            SEARCH_ARG="--skip-search"
+          fi
+          
+          python src/main.py $TRACK_ARG $SEARCH_ARG
+
+      - name: Commit output
+        run: |
+          git config --local user.email "bot@wxarticle.dev"
+          git config --local user.name "wxarticle-bot"
+          git add output/ || true
+          git diff --staged --quiet || git commit -m "📝 $(date +%Y-%m-%d) 文章已生成"
+          git push

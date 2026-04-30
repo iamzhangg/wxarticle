@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+venv/
+.venv/
+
+# 环境变量
+.env
+
+# 输出文件（服务器重新生成）
+output/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 临时测试/部署脚本
+_test_*.py
+_check_*.py
+_deploy_*.py
+_koyeb_*.py
+_push_*.py
+_server_*.py
+bt_*.py
+bt_*.png
+koyeb_*.png
+
+# 日志
+*.log
+
+# 预览测试
+test_preview/
+
+# 工具目录
+.codebuddy/
+.workbuddy/
+
+# 引导图原图备份
+*_original.jpeg

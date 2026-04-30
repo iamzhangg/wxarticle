@@ -1,0 +1,96 @@
+web:
+  host: 0.0.0.0
+  port: 8080
+tracks:
+- name: 感悟赛道
+  enabled: false
+  articles_per_day: 1
+  keywords:
+  - 人生感悟
+  - 生活智慧
+  - 中年危机
+  - 自我成长
+  - 人间清醒
+  - 心态
+  - 处世
+  - 亲情
+  search_sources:
+  - toutiao
+  - weixin
+  image_style: warm, peaceful, contemplative, nature, soft light, lifestyle
+- name: AI赛道
+  enabled: false
+  articles_per_day: 1
+  keywords:
+  - AI
+  - 人工智能
+  - ChatGPT
+  - 大模型
+  - AI工具
+  - AI副业
+  - Prompt
+  - 智能体
+  search_sources:
+  - toutiao
+  - weixin
+  image_style: technology, futuristic, digital, blue light, abstract
+- name: 人物赛道
+  enabled: false
+  articles_per_day: 1
+  keywords:
+  - 历史人物
+  - 名人故事
+  - 人物传记
+  - 伟人
+  - 英雄
+  - 企业家
+  - 科学家
+  - 文学家
+  - 现当代人物
+  search_sources:
+  - toutiao
+  - weixin
+  image_style: portrait, dramatic light, vintage, history, documentary, silhouette
+- name: 生活赛道
+  enabled: true
+  articles_per_day: 1
+  keywords:
+  - 生活小窍门
+  - 家居技巧
+  - 收纳整理
+  - 厨房妙招
+  - 生活仪式感
+  - 极简生活
+  - 省钱攻略
+  - 生活智慧
+  search_sources:
+  - toutiao
+  - weixin
+  image_style: cozy home, clean, organized, lifestyle, kitchen, bright, warm
+- name: 高校赛道
+  enabled: false
+  articles_per_day: 1
+  keywords:
+  - 大学生
+  - 考研
+  - 宿舍
+  - 专业
+  - 就业
+  - 校园
+  - 论文
+  - 实习
+  search_sources:
+  - toutiao
+  - weixin
+  image_style: campus, youth, study, books, classroom, energetic, bright
+generation:
+  model: Qwen/Qwen3-235B-A22B-Instruct-2507
+  word_count_min: 1200
+  word_count_max: 1300
+  max_similarity: 0.1
+  image_source: ai
+  inline_image_count: 3
+  min_chars_between_images: 300
+schedule:
+  time: 08:00
+  cron: 0 0 * * *
