@@ -19,7 +19,7 @@ tracks:
   - weixin
   image_style: warm, peaceful, contemplative, nature, soft light, lifestyle
 - name: AI赛道
-  enabled: false
+  enabled: true
   articles_per_day: 1
   keywords:
   - AI
@@ -52,7 +52,7 @@ tracks:
   - weixin
   image_style: portrait, dramatic light, vintage, history, documentary, silhouette
 - name: 生活赛道
-  enabled: true
+  enabled: false
   articles_per_day: 1
   keywords:
   - 生活小窍门

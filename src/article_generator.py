@@ -7,9 +7,9 @@ v2升级：支持赛道prompt + 热门选题 + khazix-writer写作风格
 import json
 import re
 import time
+import requests
 from pathlib import Path
 from typing import Optional
-from openai import OpenAI
 from config import (
     SILICONFLOW_API_KEY, SILICONFLOW_BASE_URL, MODEL_NAME,
     TARGET_WORD_COUNT, TARGET_WORD_MIN, TARGET_WORD_MAX,
@@ -114,7 +114,7 @@ def check_banned_punctuation(text: str) -> list[str]:
         if punct in text:
             hits.append(f"'{punct}' {reason}")
     # 双引号检查
-    if '"' in text or '"' in text:
+    if '“' in text or '”' in text:
         hits.append("禁用双引号，用「」替代")
     return hits
 
@@ -323,11 +323,6 @@ def generate_article(
     word_min = gen_config.get("word_count_min", TARGET_WORD_MIN)
     word_max = gen_config.get("word_count_max", TARGET_WORD_MAX)
 
-    client = OpenAI(
-        api_key=SILICONFLOW_API_KEY,
-        base_url=SILICONFLOW_BASE_URL,
-    )
-
     # 构建prompt
     if hot_topic:
         prompt = build_track_aware_prompt(track_prompt, hot_topic)
@@ -341,18 +336,27 @@ def generate_article(
         print(f"  [GEN] attempt {attempt}/{max_retries}...")
 
         try:
-            response = client.chat.completions.create(
-                model=model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=0.75,
-                max_tokens=8000,  # 卡兹克风格4000-8000字，需要更大token
-                top_p=0.85,
+            resp = requests.post(
+                f"{SILICONFLOW_BASE_URL}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {SILICONFLOW_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": prompt},
+                    ],
+                    "temperature": 0.75,
+                    "max_tokens": 8000,
+                    "top_p": 0.85,
+                },
+                timeout=300,
             )
-
-            raw_content = response.choices[0].message.content.strip()
+            resp.raise_for_status()
+            data = resp.json()
+            raw_content = data["choices"][0]["message"]["content"].strip()
             if not raw_content:
                 print("  [WARN] empty response, retrying...")
                 continue
@@ -417,7 +421,9 @@ def generate_article(
                         break
 
             # 生成简介
-            summary = _generate_summary(client, model, title, content)
+            from openai import OpenAI
+            ai_client = OpenAI(api_key=SILICONFLOW_API_KEY, base_url=SILICONFLOW_BASE_URL)
+            summary = _generate_summary(ai_client, title, content)
 
             return {
                 "title": title,
@@ -442,7 +448,7 @@ def _auto_fix_l1_issues(text: str) -> str:
     text = text.replace("：", "，")
     text = text.replace("——", "，")
     # 修复双引号
-    text = text.replace('"', '「').replace('"', '」')
+    text = text.replace('“', '「').replace('”', '」')
 
     # 修复最常见的禁用词
     replacements = {
@@ -462,11 +468,11 @@ def _auto_fix_l1_issues(text: str) -> str:
     return text
 
 
-def _generate_summary(client, model: str, title: str, content: str) -> str:
+def _generate_summary(client, title: str, content: str) -> str:
     """用AI生成文章简介（≤120字）"""
     try:
         response = client.chat.completions.create(
-            model="Qwen/Qwen3-8B",  # 简介生成用小模型，速度快
+            model="Qwen/Qwen3-8B",
             messages=[
                 {"role": "system", "content": "你是一个文章摘要生成器。请为给定文章生成一段简洁的简介，不超过120字，直接输出简介文本，不要任何格式。用聊天式的口吻，不要像摘要。"},
                 {"role": "user", "content": f"标题：{title}\n\n正文：{content[:1000]}"},

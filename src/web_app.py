@@ -358,6 +358,11 @@ def trigger_generate(track_name: str = ""):
     tracks = get_enabled_tracks()
     if track_name:
         tracks = [t for t in tracks if t["name"] == track_name]
+        if not tracks:
+            return {"status": "error", "message": f"赛道 '{track_name}' 不存在或未启用"}
+
+    if not tracks:
+        return {"status": "error", "message": "没有启用的赛道，请检查 config.yaml"}
 
     # 在主线程中提前创建 generating 占位，确保前端刷新时能立刻看到
     date_str = datetime.now().strftime("%Y-%m-%d")

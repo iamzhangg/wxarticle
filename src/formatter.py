@@ -713,9 +713,11 @@ def generate_preview_html(
 def _md_to_html_basic(md: str) -> str:
     """将Markdown转为基本HTML（不依赖外部库）"""
     # 先去掉质检报告部分（## 四层自检 / ## 质检报告 及其后面的所有内容）
-    md = re.sub(r'\n##\s*(四层自检|质检报告|自检报告|L[1-4]检查).*', '', md, flags=re.DOTALL)
-    # 去掉单独一行的自检标记
-    md = re.sub(r'^[✅❌⚠️].*$', '', md, flags=re.MULTILINE)
+    cutoff = re.search(r'\n##\s*(?:四层自检|质检报告|自检报告|L[1-4]检查)', md)
+    if cutoff:
+        md = md[:cutoff.start()]
+    # 去掉单独一行的自检标记（✅ ❌ ⚠️ 开头的行）
+    md = re.sub(r'^[✅❌⚠️💡🔥⭐🚀💰📈📉].*$', '', md, flags=re.MULTILINE)
 
     lines = md.split("\n")
     html_parts = []

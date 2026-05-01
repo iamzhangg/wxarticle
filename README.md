@@ -2,6 +2,8 @@
 
 微信公众号文章自动生成工具（赛道制）—— AI写稿 + 自动配图 + 微信排版 + Web控制台
 
+> 🐛 **v2.1** — 本轮修复了 7 个 bug，包括生成器 `client` 未定义、双引号替换失效、正则误删内容等问题，详见 commit 历史。
+
 ## ✨ 功能亮点
 
 - 🏁 **多赛道制**：感悟、人物、生活、AI、高校，每个赛道独立prompt
@@ -86,6 +88,7 @@ python src/main.py --dry-run --skip-search
 
 ```
 wxarticle/
+├── CLAUDE.md                # Claude Code 项目指引
 ├── config.yaml              # 赛道+生成+定时配置（网页可编辑）
 ├── .env                     # API密钥（不进版本控制）
 ├── start_web.py             # 启动Web控制台
