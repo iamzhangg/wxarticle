@@ -489,6 +489,19 @@ def trigger_generate(track_name: str = ""):
     return {"status": "started", "message": "生成任务已启动", "tracks": track_names}
 
 
+@app.get("/api/log")
+def get_generate_log(lines: int = 100):
+    """查看最近的生成日志"""
+    from fastapi.responses import PlainTextResponse
+    log_file = PROJECT_ROOT / "generate.log"
+    if not log_file.exists():
+        return PlainTextResponse("(无日志)", media_type="text/plain; charset=utf-8")
+    with open(log_file, "r", encoding="utf-8", errors="replace") as f:
+        all_lines = f.readlines()
+        content = "".join(all_lines[-lines:])
+    return PlainTextResponse(content, media_type="text/plain; charset=utf-8")
+
+
 @app.get("/api/generate/status")
 def get_generation_status():
     """获取生成任务状态"""
