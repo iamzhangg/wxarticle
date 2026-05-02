@@ -815,12 +815,12 @@ def _md_to_html_basic(md: str) -> str:
 
 def _inline_format(text: str) -> str:
     """处理行内格式：粗体、斜体、代码、链接"""
+    text = re.sub(r"!\[(.+?)\]\((.+?)\)", r'<img src="\2" alt="\1">', text)
     text = re.sub(r"\*\*\*(.+?)\*\*\*", r"<strong><em>\1</em></strong>", text)
     text = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", text)
     text = re.sub(r"\*(.+?)\*", r"<em>\1</em>", text)
     text = re.sub(r"`(.+?)`", r"<code>\1</code>", text)
     text = re.sub(r"\[(.+?)\]\((.+?)\)", r'<a href="\2">\1</a>', text)
-    text = re.sub(r"!\[(.+?)\]\((.+?)\)", r'<img src="\2" alt="\1">', text)
     return text
 
 
@@ -877,19 +877,17 @@ def _prepend_bg_none(style_val: str) -> str:
 
 
 def _insert_inline_images(html: str, images: list[str]) -> str:
-    """在文章正文中插入插图，前后至少200个汉字，不在开头/结尾"""
+    """在文章正文中插入插图，默认两张图把正文分成三段。"""
     if not images:
         return html
 
     plain_text = re.sub(r"<[^>]+>", "", html)
     total_chars = len(plain_text)
 
-    # 根据文章长度动态计算最多能放几张图（前后各留min_gap，图之间也至少min_gap）
-    min_gap = 200
-    # N张图需要: min_gap + N * min_gap 的最小空间
-    max_images_by_length = max(0, total_chars // min_gap - 2)
-    if len(images) > max_images_by_length:
-        images = images[:max(0, max_images_by_length)]
+    edge_gap = 120
+    min_gap = 180
+    if total_chars < edge_gap * 2 + min_gap:
+        images = images[:1]
         if not images:
             return html
 
@@ -905,26 +903,33 @@ def _insert_inline_images(html: str, images: list[str]) -> str:
     if not p_positions:
         return html
 
-    usable_start = min_gap
-    usable_end = total_chars - min_gap
+    usable_start = edge_gap
+    usable_end = total_chars - edge_gap
     if usable_end <= usable_start:
         return html
 
     n_images = len(images)
-    interval = (usable_end - usable_start) / (n_images + 1)
-    target_positions = [usable_start + interval * (j + 1) for j in range(n_images)]
+    target_positions = [total_chars * (j + 1) / (n_images + 1) for j in range(n_images)]
+    target_positions = [min(max(pos, usable_start), usable_end) for pos in target_positions]
 
     insert_points = []
+    used_indices = set()
     for target in target_positions:
         best = None
         best_diff = float("inf")
         for idx, (pos, char_pos) in enumerate(p_positions):
-            if char_pos >= target:
-                diff = abs(char_pos - target)
-                if diff < best_diff:
-                    best = idx
-                    best_diff = diff
+            if idx in used_indices:
+                continue
+            if char_pos < usable_start or char_pos > usable_end:
+                continue
+            if insert_points and char_pos - insert_points[-1][1] < min_gap:
+                continue
+            diff = abs(char_pos - target)
+            if diff < best_diff:
+                best = idx
+                best_diff = diff
         if best is not None:
+            used_indices.add(best)
             insert_points.append(p_positions[best])
 
     for j in range(len(insert_points) - 1, -1, -1):

@@ -7,6 +7,7 @@ FastAPI后端，提供文章管理、下载、设置等API
 """
 import json
 import os
+import re
 import shutil
 import sys
 import threading
@@ -41,9 +42,28 @@ _generation_status = {
     "started_at": None,
     "finished_at": None,
 }
+_generation_lock = threading.Lock()
 
 # 定时任务状态
 _scheduler_running = False
+
+
+def _resolve_output_path(*parts: str) -> Path:
+    """Resolve an article path and keep it inside OUTPUT_DIR."""
+    base = OUTPUT_DIR.resolve()
+    path = base.joinpath(*parts).resolve()
+    if path != base and base not in path.parents:
+        raise HTTPException(status_code=400, detail="非法路径")
+    return path
+
+
+def _get_article_dir(date: str, track_dir: str) -> Path:
+    """Validate article route params and return a safe article directory."""
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):
+        raise HTTPException(status_code=400, detail="日期格式错误")
+    if any(sep in track_dir for sep in ("/", "\\")) or track_dir in ("", ".", ".."):
+        raise HTTPException(status_code=400, detail="文章目录名错误")
+    return _resolve_output_path(date, track_dir)
 
 
 def _start_scheduler():
@@ -144,6 +164,8 @@ def list_articles():
     for date_dir in sorted(OUTPUT_DIR.iterdir(), reverse=True):
         if not date_dir.is_dir():
             continue
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date_dir.name):
+            continue
         for article_dir in sorted(date_dir.iterdir(), reverse=True):
             if not article_dir.is_dir():
                 continue
@@ -218,7 +240,7 @@ def list_articles():
 @app.get("/api/articles/{date}/{track_dir}")
 def get_article_detail(date: str, track_dir: str):
     """获取单篇文章详情"""
-    article_dir = OUTPUT_DIR / date / track_dir
+    article_dir = _get_article_dir(date, track_dir)
     if not article_dir.exists():
         raise HTTPException(status_code=404, detail="文章不存在")
 
@@ -262,7 +284,7 @@ def get_article_detail(date: str, track_dir: str):
 @app.get("/api/articles/{date}/{track_dir}/cover")
 def download_cover(date: str, track_dir: str):
     """下载封面图"""
-    cover_path = OUTPUT_DIR / date / track_dir / "cover.jpg"
+    cover_path = _get_article_dir(date, track_dir) / "cover.jpg"
     if not cover_path.exists():
         raise HTTPException(status_code=404, detail="封面图不存在")
     return FileResponse(
@@ -275,7 +297,7 @@ def download_cover(date: str, track_dir: str):
 @app.get("/api/articles/{date}/{track_dir}/html")
 def download_html(date: str, track_dir: str):
     """下载排版HTML"""
-    html_path = OUTPUT_DIR / date / track_dir / "article_content.html"
+    html_path = _get_article_dir(date, track_dir) / "article_content.html"
     if not html_path.exists():
         raise HTTPException(status_code=404, detail="HTML文件不存在")
     return FileResponse(
@@ -288,9 +310,10 @@ def download_html(date: str, track_dir: str):
 @app.get("/api/articles/{date}/{track_dir}/preview")
 def preview_article(date: str, track_dir: str):
     """预览文章"""
-    html_path = OUTPUT_DIR / date / track_dir / "article.html"
+    article_dir = _get_article_dir(date, track_dir)
+    html_path = article_dir / "article.html"
     if not html_path.exists():
-        html_path = OUTPUT_DIR / date / track_dir / "article_content.html"
+        html_path = article_dir / "article_content.html"
     if not html_path.exists():
         raise HTTPException(status_code=404, detail="预览页面不存在")
 
@@ -351,50 +374,68 @@ def update_settings(settings: dict):
 @app.post("/api/generate")
 def trigger_generate(track_name: str = ""):
     """触发文章生成（异步），可指定赛道"""
-    if _generation_status["running"]:
-        return {"status": "already_running", "message": "已有生成任务在运行中"}
+    with _generation_lock:
+        if _generation_status["running"]:
+            return {"status": "already_running", "message": "已有生成任务在运行中"}
 
-    # 在外面获取赛道列表
-    tracks = get_enabled_tracks()
-    if track_name:
-        tracks = [t for t in tracks if t["name"] == track_name]
+        # 在外面获取赛道列表
+        tracks = get_enabled_tracks()
+        if track_name:
+            tracks = [t for t in tracks if t["name"] == track_name]
+            if not tracks:
+                return {"status": "error", "message": f"赛道 '{track_name}' 不存在或未启用"}
+
         if not tracks:
-            return {"status": "error", "message": f"赛道 '{track_name}' 不存在或未启用"}
+            return {"status": "error", "message": "没有启用的赛道，请检查 config.yaml"}
 
-    if not tracks:
-        return {"status": "error", "message": "没有启用的赛道，请检查 config.yaml"}
+        _generation_status.update({
+            "running": True,
+            "progress": "准备生成...",
+            "track_name": track_name,
+            "results": [],
+            "started_at": datetime.now().isoformat(),
+            "finished_at": None,
+        })
 
-    # 在主线程中提前创建 generating 占位，确保前端刷新时能立刻看到
-    date_str = datetime.now().strftime("%Y-%m-%d")
-    pending_dirs = []
-    pre_assigned_dirs = {}
-    for track in tracks:
-        from main import _get_next_output_dir
-        out_dir = _get_next_output_dir(date_str, track["name"])
-        out_dir.mkdir(parents=True, exist_ok=True)
-        # 写入生成中的 meta
-        meta = {
-            "track": track["name"],
-            "title": f"正在生成：{track['name']}文章...",
-            "summary": "文章正在生成中，请稍候",
-            "word_count": 0,
-            "generated_at": datetime.now().isoformat(),
-            "status": "generating",
-        }
-        with open(out_dir / "meta.json", "w", encoding="utf-8") as f:
-            json.dump(meta, f, ensure_ascii=False, indent=2)
-        pending_dirs.append(out_dir)
-        pre_assigned_dirs[track["name"]] = str(out_dir)
+        # 在主线程中提前创建 generating 占位，确保前端刷新时能立刻看到
+        date_str = datetime.now().strftime("%Y-%m-%d")
+        pending_dirs = []
+        pre_assigned_dirs = {}
+        try:
+            from main import _get_next_output_dir
+            for track in tracks:
+                article_count = max(1, int(track.get("articles_per_day", 1) or 1))
+                pre_assigned_dirs[track["name"]] = []
+                for index in range(article_count):
+                    out_dir = _get_next_output_dir(date_str, track["name"])
+                    out_dir.mkdir(parents=True, exist_ok=True)
+                    # 写入生成中的 meta
+                    meta = {
+                        "track": track["name"],
+                        "title": f"正在生成：{track['name']}文章...",
+                        "summary": "文章正在生成中，请稍候",
+                        "word_count": 0,
+                        "generated_at": datetime.now().isoformat(),
+                        "status": "generating",
+                        "article_index": index + 1,
+                        "articles_per_day": article_count,
+                    }
+                    with open(out_dir / "meta.json", "w", encoding="utf-8") as f:
+                        json.dump(meta, f, ensure_ascii=False, indent=2)
+                    pending_dirs.append(out_dir)
+                    pre_assigned_dirs[track["name"]].append(str(out_dir))
+        except Exception as e:
+            _generation_status["running"] = False
+            _generation_status["progress"] = f"准备生成失败: {e}"
+            _generation_status["finished_at"] = datetime.now().isoformat()
+            return {"status": "error", "message": f"准备生成失败: {e}"}
 
     def _monitor(proc):
-        _generation_status["running"] = True
-        _generation_status["progress"] = "正在生成..."
-        _generation_status["track_name"] = track_name
-        _generation_status["results"] = []
-        _generation_status["started_at"] = datetime.now().isoformat()
-        _generation_status["finished_at"] = None
+        with _generation_lock:
+            _generation_status["progress"] = "正在生成..."
 
         success = False
+        retcode = None
         try:
             # 轮询子进程状态，避免 wait() 阻塞问题
             deadline = time.time() + 600  # 最多等10分钟
@@ -406,15 +447,18 @@ def trigger_generate(track_name: str = ""):
                 time.sleep(2)
             else:
                 proc.kill()
-                _generation_status["progress"] = "错误: 超时（10分钟）"
+                with _generation_lock:
+                    _generation_status["progress"] = "错误: 超时（10分钟）"
             if retcode is not None:
-                _generation_status["progress"] = "完成" if success else "生成失败"
+                with _generation_lock:
+                    _generation_status["progress"] = "完成" if success else "生成失败"
         except Exception as e:
             try:
                 proc.kill()
             except Exception:
                 pass
-            _generation_status["progress"] = f"错误: {e}"
+            with _generation_lock:
+                _generation_status["progress"] = f"错误: {e}"
         finally:
             if not success:
                 # 生成失败：将占位目录标记为 failed（不删除，保留现场）
@@ -432,8 +476,9 @@ def trigger_generate(track_name: str = ""):
                         except Exception:
                             pass
             # 成功时不需要处理占位——子进程会覆盖 meta.json 和文件
-            _generation_status["running"] = False
-            _generation_status["finished_at"] = datetime.now().isoformat()
+            with _generation_lock:
+                _generation_status["running"] = False
+                _generation_status["finished_at"] = datetime.now().isoformat()
             # push_data 在后台线程执行，不阻塞 monitor
             threading.Thread(target=push_data, daemon=True).start()
 
@@ -443,6 +488,11 @@ def trigger_generate(track_name: str = ""):
     if track_name:
         cmd.extend(["--track", track_name])
     env = os.environ.copy()
+    for proxy_key in (
+        "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY",
+        "http_proxy", "https_proxy", "all_proxy",
+    ):
+        env.pop(proxy_key, None)
     # 通过环境变量传递预分配目录，子进程会生成到同一个目录
     env["WX_PRE_ASSIGNED_DIRS"] = json.dumps(pre_assigned_dirs, ensure_ascii=True)
     env["PYTHONUNBUFFERED"] = "1"  # 确保子进程输出不缓冲
@@ -478,8 +528,10 @@ def trigger_generate(track_name: str = ""):
                         json.dump(meta, f, ensure_ascii=False, indent=2)
                 except Exception:
                     pass
-        _generation_status["running"] = False
-        _generation_status["progress"] = f"启动子进程失败: {e}"
+        with _generation_lock:
+            _generation_status["running"] = False
+            _generation_status["progress"] = f"启动子进程失败: {e}"
+            _generation_status["finished_at"] = datetime.now().isoformat()
         return {"status": "error", "message": f"启动子进程失败: {e}"}
 
     track_names = [t["name"] for t in tracks]
@@ -637,7 +689,7 @@ def restart_service():
 @app.delete("/api/articles/{date}/{track_dir}")
 def delete_article(date: str, track_dir: str):
     """删除指定文章"""
-    article_dir = OUTPUT_DIR / date / track_dir
+    article_dir = _get_article_dir(date, track_dir)
     if not article_dir.exists():
         raise HTTPException(status_code=404, detail="文章不存在")
 
@@ -663,7 +715,7 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 # ============ 启动入口 ============
 
-def run_server(host: str = "0.0.0.0", port: int = 8080):
+def run_server(host: str = "127.0.0.1", port: int = 8080):
     """启动Web服务器"""
     import uvicorn
     print(f"[WEB] wxarticle 控制台启动: http://{host}:{port}")
@@ -673,7 +725,7 @@ def run_server(host: str = "0.0.0.0", port: int = 8080):
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="wxarticle Web控制台")
-    parser.add_argument("--host", type=str, default="0.0.0.0", help="监听地址")
+    parser.add_argument("--host", type=str, default="127.0.0.1", help="监听地址")
     parser.add_argument("--port", type=int, default=8080, help="监听端口")
     args = parser.parse_args()
     run_server(host=args.host, port=args.port)

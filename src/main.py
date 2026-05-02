@@ -62,6 +62,20 @@ else:
     from image_searcher import generate_cover_image, generate_inline_image
 
 
+def _normalize_pre_assigned_dirs(raw_dirs: dict | None) -> dict[str, list[Path]]:
+    """Normalize legacy {track: path} and current {track: [paths]} formats."""
+    if not raw_dirs:
+        return {}
+
+    normalized = {}
+    for track_name, value in raw_dirs.items():
+        if isinstance(value, list):
+            normalized[track_name] = [Path(v) for v in value]
+        else:
+            normalized[track_name] = [Path(value)]
+    return normalized
+
+
 def _extract_image_topics(title: str, content: str) -> list[str]:
     """从文章标题和内容中提取插图搜索主题词"""
     import re
@@ -312,7 +326,7 @@ def main(
     dry_run: bool = False,
     track_name: str = "",
     skip_search: bool = False,
-    pre_assigned_dirs: dict[str, Path] | None = None,
+    pre_assigned_dirs: dict | None = None,
 ) -> bool:
     """v2主流程"""
     start_time = time.time()
@@ -336,28 +350,37 @@ def main(
             print(f"✗ 未找到赛道: {track_name}")
             return False
 
-    print(f"\n[STAT] 今日任务: {len(all_tracks)} 个赛道")
+    total_tasks = sum(max(1, int(t.get("articles_per_day", 1) or 1)) for t in all_tracks)
+    assigned_dirs = _normalize_pre_assigned_dirs(pre_assigned_dirs)
+
+    print(f"\n[STAT] 今日任务: {len(all_tracks)} 个赛道，共 {total_tasks} 篇文章")
     for t in all_tracks:
-        print(f"  - {t['name']} (关键词: {', '.join(t.get('keywords', [])[:3])}...)")
+        article_count = max(1, int(t.get("articles_per_day", 1) or 1))
+        print(f"  - {t['name']} × {article_count} (关键词: {', '.join(t.get('keywords', [])[:3])}...)")
 
     # 逐赛道处理
     results = []
     for track in all_tracks:
-        try:
-            out_dir = pre_assigned_dirs.get(track["name"]) if pre_assigned_dirs else None
-            result = process_track(track, dry_run=dry_run, skip_search=skip_search, output_dir=out_dir)
-            if result:
-                results.append(result)
-        except Exception as e:
-            print(f"  ✗ 赛道 '{track['name']}' 处理失败: {e}")
-            import traceback
-            traceback.print_exc()
+        article_count = max(1, int(track.get("articles_per_day", 1) or 1))
+        track_dirs = assigned_dirs.get(track["name"], [])
+        for article_index in range(article_count):
+            try:
+                out_dir = track_dirs[article_index] if article_index < len(track_dirs) else None
+                if article_count > 1:
+                    print(f"\n[INFO] {track['name']} 第 {article_index + 1}/{article_count} 篇")
+                result = process_track(track, dry_run=dry_run, skip_search=skip_search, output_dir=out_dir)
+                if result:
+                    results.append(result)
+            except Exception as e:
+                print(f"  ✗ 赛道 '{track['name']}' 第 {article_index + 1} 篇处理失败: {e}")
+                import traceback
+                traceback.print_exc()
 
     # ========== 完成 ==========
     elapsed = time.time() - start_time
     print(f"\n{'=' * 60}")
     print(f"[OK] 完成！总耗时: {elapsed:.1f}秒")
-    print(f"   成功生成: {len(results)}/{len(all_tracks)} 篇文章")
+    print(f"   成功生成: {len(results)}/{total_tasks} 篇文章")
     for r in results:
         print(f"   [WRITE] {r['track']}: {r['title']}")
     print(f"   输出目录: {OUTPUT_DIR / datetime.now().strftime('%Y-%m-%d')}")
@@ -378,7 +401,7 @@ if __name__ == "__main__":
     env_dirs = os.environ.get("WX_PRE_ASSIGNED_DIRS", "")
     if env_dirs:
         try:
-            pre_assigned = {k: Path(v) for k, v in json.loads(env_dirs).items()}
+            pre_assigned = json.loads(env_dirs)
             print(f"[INFO] 使用预分配目录: {pre_assigned}")
         except Exception as e:
             print(f"[WARN] 解析 WX_PRE_ASSIGNED_DIRS 失败: {e}")

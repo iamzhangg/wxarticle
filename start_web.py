@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 import uvicorn
 from web_app import app
 
+host = os.environ.get("HOST", "127.0.0.1")
 port = int(os.environ.get("PORT", 8080))
-print(f"🌐 wxarticle 控制台启动: http://0.0.0.0:{port}")
-uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
+print(f"🌐 wxarticle 控制台启动: http://{host}:{port}")
+uvicorn.run(app, host=host, port=port, log_level="info")

@@ -128,8 +128,8 @@ def check_ai_patterns(text: str) -> list[str]:
     # 检测"不仅...而且...更..."
     if re.search(r"不仅.*而且.*更", text):
         patterns.append("递进三段式")
-    # 检测emoji装饰
-    if re.search(r"[🔴🟢🟡[OK]❌💡[TARGET][PIN]🔥⭐🚀💰📈📉]", text):
+    # 检测emoji装饰和日志标签，避免把 OpenAI/Prompt 等英文误判为装饰
+    if re.search(r"(?:🔴|🟢|🟡|❌|💡|🔥|⭐|🚀|💰|📈|📉|\[OK\]|\[TARGET\]|\[PIN\])", text):
         patterns.append("Emoji装饰")
     # 检测加粗标题列表模式
     if len(re.findall(r"\*\*[^*]+\*\*[：:]", text)) > 3:

@@ -277,7 +277,6 @@ def select_best_topic(
 
     if not SILICONFLOW_API_KEY:
         # 没有API Key时，随机选一个
-        import random
         topic = random.choice(hot_topics)
         return {"title": topic["title"], "angle": "直接切入"}
 

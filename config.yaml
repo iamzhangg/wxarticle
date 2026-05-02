@@ -1,5 +1,5 @@
 web:
-  host: 0.0.0.0
+  host: 127.0.0.1
   port: 8080
 tracks:
 - name: 感悟赛道
@@ -89,7 +89,7 @@ generation:
   word_count_max: 1300
   max_similarity: 0.1
   image_source: ai
-  inline_image_count: 3
+  inline_image_count: 2
   min_chars_between_images: 300
 schedule:
   time: 08:00

@@ -29,9 +29,11 @@ _deploy_*.py
 _koyeb_*.py
 _push_*.py
 _server_*.py
+_cloud_*.zip
 bt_*.py
 bt_*.png
 koyeb_*.png
+wxarticle_cloud.png
 
 # 日志
 *.log
@@ -40,6 +42,7 @@ koyeb_*.png
 test_preview/
 
 # 工具目录
+.claude/
 .codebuddy/
 .workbuddy/
 
