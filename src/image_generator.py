@@ -7,7 +7,15 @@ from pathlib import Path
 from typing import Optional
 
 import requests
-from PIL import Image
+try:
+    from PIL import Image
+except ImportError:
+    import sys
+    print("=" * 60)
+    print("[FATAL] Pillow 未安装！请运行:")
+    print(f"  {sys.executable} -m pip install Pillow -i https://pypi.tuna.tsinghua.edu.cn/simple")
+    print("=" * 60)
+    sys.exit(1)
 
 from config import (
     SILICONFLOW_API_KEY, SILICONFLOW_BASE_URL,

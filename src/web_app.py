@@ -577,13 +577,14 @@ def self_update():
                 elif src.is_file():
                     shutil.copy2(str(src), str(dst))
 
-        # 安装新依赖（如果有变化）
+        # 安装新依赖（使用清华镜像加速）
         try:
             import subprocess
             pip_path = PROJECT_ROOT / "venv" / "Scripts" / "pip.exe"
             if pip_path.exists():
                 subprocess.run(
-                    [str(pip_path), "install", "-r", str(PROJECT_ROOT / "requirements.txt")],
+                    [str(pip_path), "install", "-r", str(PROJECT_ROOT / "requirements.txt"),
+                     "-i", "https://pypi.tuna.tsinghua.edu.cn/simple"],
                     capture_output=True, timeout=120
                 )
         except Exception:
