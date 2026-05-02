@@ -565,8 +565,8 @@ def self_update():
         if not inner:
             return {"status": "error", "message": "解压后未找到项目目录"}
 
-        # 复制关键目录和文件（保留 .env、output、venv）
-        for item in ["src", "tracks", "assets", "config.yaml", "start_web.py", "requirements.txt", "README.md", ".env.example"]:
+        # 复制关键目录和文件（保留 .env、output、venv、config.yaml）
+        for item in ["src", "tracks", "assets", "start_web.py", "requirements.txt", "README.md", ".env.example"]:
             src = inner / item
             dst = PROJECT_ROOT / item
             if src.exists():
