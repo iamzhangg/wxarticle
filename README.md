@@ -170,6 +170,35 @@ generation:
 3. 每天08:00自动生成，输出自动提交到data分支
 4. 也支持手动触发（Actions页面 → Run workflow）
 
+## 🖥 Windows 宝塔部署
+
+服务器使用管理员 PowerShell 执行：
+
+```powershell
+Set-ExecutionPolicy Bypass -Scope Process -Force; irm https://raw.githubusercontent.com/iamzhangg/wxarticle/master/deploy_windows.ps1 | iex
+```
+
+脚本会从 GitHub 拉取 `master` 到 `C:\wxarticle`，创建虚拟环境、安装依赖，并注册开机自启任务 `wxarticle`。服务默认只监听 `127.0.0.1:8080`；公网访问建议在宝塔/Nginx 中反向代理到 `http://127.0.0.1:8080`，并加访问认证或防火墙白名单。
+
+首次部署后编辑：
+
+```text
+C:\wxarticle\.env
+```
+
+至少填入：
+
+```env
+SILICONFLOW_API_KEY=你的硅基流动Key
+IMAGE_SOURCE=ai
+```
+
+然后重启任务：
+
+```powershell
+schtasks /run /tn wxarticle
+```
+
 ## 🧩 涉及的模型
 
 | 用途 | 模型 | 平台 |

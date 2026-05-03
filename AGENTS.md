@@ -102,3 +102,13 @@ output/{日期}/{赛道名}/
 - 默认生成2张正文插图，排版时靠近正文1/3和2/3处，让内容自然分成三段
 - Windows下的子进程生成使用 `CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS` 确保进程完全独立
 - 文章生成在 `generate.log` 中有详细日志（子进程stdout/stderr都写到这里）
+
+## 服务器部署
+
+目标环境是腾讯云轻量应用服务器（Windows Server + 宝塔面板）。部署入口：
+
+```powershell
+Set-ExecutionPolicy Bypass -Scope Process -Force; irm https://raw.githubusercontent.com/iamzhangg/wxarticle/master/deploy_windows.ps1 | iex
+```
+
+脚本从 GitHub 拉取 `master` 到 `C:\wxarticle`，创建 venv，安装依赖，注册开机自启任务 `wxarticle`。服务默认只监听 `127.0.0.1:8080`，公网访问推荐在宝塔/Nginx 里反向代理到 `http://127.0.0.1:8080`，并加 Basic Auth、登录态或腾讯云防火墙白名单。临时公网直连才设置 `HOST=0.0.0.0` 并放行 TCP 8080。

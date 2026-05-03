@@ -9,6 +9,9 @@ param([switch]$Update)
 $ErrorActionPreference = "Stop"
 $ProjectDir = "C:\wxarticle"
 $RepoUrl = "https://github.com/iamzhangg/wxarticle.git"
+$PipIndexUrl = "https://pypi.tuna.tsinghua.edu.cn/simple"
+$ServiceHost = "127.0.0.1"
+$ServicePort = 8080
 
 Write-Host "=====================================" -ForegroundColor Cyan
 if ($Update) {
@@ -91,7 +94,7 @@ if (-not (Test-Path "$ProjectDir\venv\Scripts\python.exe")) {
     Write-Host "  Venv created" -ForegroundColor Green
 }
 $pip = "$ProjectDir\venv\Scripts\pip.exe"
-& $pip install -r "$ProjectDir\requirements.txt" -q 2>&1 | Select-Object -Last 5 | Write-Host
+& $pip install -r "$ProjectDir\requirements.txt" -i $PipIndexUrl -q 2>&1 | Select-Object -Last 5 | Write-Host
 Write-Host "  Dependencies installed" -ForegroundColor Green
 
 # ============ Step 5: .env config ============
@@ -109,8 +112,14 @@ if (-not (Test-Path "$ProjectDir\.env")) {
 # ============ Step 6: Setup Auto-start + Start Service ============
 Write-Host "`n[6/6] Setting up service..." -ForegroundColor Yellow
 
-# Stop existing process on port 8080
-$existing = netstat -aon | Select-String ":8080" | Select-String "LISTENING"
+# Keep the Python service local-only. Use BaoTa/Nginx reverse proxy for public access.
+[System.Environment]::SetEnvironmentVariable("HOST", $ServiceHost, "Machine")
+[System.Environment]::SetEnvironmentVariable("PORT", "$ServicePort", "Machine")
+$env:HOST = $ServiceHost
+$env:PORT = "$ServicePort"
+
+# Stop existing process on service port
+$existing = netstat -aon | Select-String ":$ServicePort" | Select-String "LISTENING"
 if ($existing) {
     $existingPid = ($existing -split "\s+")[-1]
     Write-Host "  Stopping old process (PID: $existingPid)..." -ForegroundColor Yellow
@@ -121,26 +130,30 @@ if ($existing) {
 # Create scheduled task for auto-start (survives reboot)
 $taskName = "wxarticle"
 Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
-$action = New-ScheduledTaskAction -Execute "$ProjectDir\venv\Scripts\python.exe" -Argument "start_web.py" -WorkingDirectory $ProjectDir
+$taskCmd = "Set-Location '$ProjectDir'; `$env:HOST='$ServiceHost'; `$env:PORT='$ServicePort'; & '$ProjectDir\venv\Scripts\python.exe' 'start_web.py'"
+$action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command `"$taskCmd`"" -WorkingDirectory $ProjectDir
 $trigger = New-ScheduledTaskTrigger -AtStartup
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RestartCount 99 -RestartInterval (New-TimeSpan -Minutes 1)
 Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -RunLevel Highest -Force | Out-Null
 Write-Host "  Auto-start task created" -ForegroundColor Green
 
 # Start the service now
-$proc = Start-Process -FilePath "$ProjectDir\venv\Scripts\python.exe" -ArgumentList "start_web.py" -WorkingDirectory $ProjectDir -PassThru -WindowStyle Hidden
+$procCmd = "Set-Location '$ProjectDir'; `$env:HOST='$ServiceHost'; `$env:PORT='$ServicePort'; & '$ProjectDir\venv\Scripts\python.exe' 'start_web.py'"
+$proc = Start-Process -FilePath "powershell.exe" -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command `"$procCmd`"" -WorkingDirectory $ProjectDir -PassThru -WindowStyle Hidden
 Start-Sleep -Seconds 5
 
 if (-not $proc.HasExited) {
     Write-Host "`n=====================================" -ForegroundColor Green
     Write-Host "  DEPLOY SUCCESS!" -ForegroundColor Green
     Write-Host "=====================================" -ForegroundColor Green
-    Write-Host "  Local:  http://localhost:8080" -ForegroundColor White
+    Write-Host "  Local:  http://localhost:$ServicePort" -ForegroundColor White
     Write-Host "  PID:    $($proc.Id)" -ForegroundColor White
     Write-Host "  Logs:   $ProjectDir\generate.log" -ForegroundColor Gray
     Write-Host "  Restart:.\restart.bat" -ForegroundColor Gray
     Write-Host "" -ForegroundColor Gray
     Write-Host "  Next:   Edit C:\wxarticle\.env and restart" -ForegroundColor Yellow
+    Write-Host "  BaoTa:  Reverse proxy public site to http://127.0.0.1:$ServicePort" -ForegroundColor Yellow
+    Write-Host "          Add auth/firewall rules before exposing it to the internet." -ForegroundColor Yellow
 } else {
     Write-Host "`n  [WARN] Service exited immediately. Check:" -ForegroundColor Red
     Write-Host "    1. .env SILICONFLOW_API_KEY is set" -ForegroundColor Red
