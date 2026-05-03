@@ -1,4 +1,4 @@
-"""参考文章解析模块 - 支持 HTML/WORD/PDF/MD/TXT/MHTML 格式"""
+﻿"""参考文章解析模块 - 支持 HTML/WORD/PDF/MD/TXT/MHTML 格式"""
 from __future__ import annotations
 import os
 from pathlib import Path
@@ -6,7 +6,7 @@ from typing import Optional
 
 
 def parse_html(filepath: Path) -> str:
-    """解析HTML文件，提取正文文本，特别支持微信公众号文章"""
+    """解析HTML文件，提取正文文本，特别支持内容平台文章"""
     from bs4 import BeautifulSoup
     with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
         soup = BeautifulSoup(f.read(), "lxml")
@@ -14,11 +14,11 @@ def parse_html(filepath: Path) -> str:
     for tag in soup(["script", "style", "nav", "header", "footer"]):
         tag.decompose()
     # 按优先级查找正文容器
-    # 1. 微信公众号文章：id="js_content" 是纯正文区域
+    # 1. 内容平台文章：id="js_content" 是纯正文区域
     article = soup.find("div", id="js_content")
     if article:
         return article.get_text(separator="\n", strip=True)
-    # 2. 微信公众号文章：id="img-content" 包含标题+正文
+    # 2. 内容平台文章：id="img-content" 包含标题+正文
     article = soup.find("div", id="img-content")
     if article:
         return article.get_text(separator="\n", strip=True)

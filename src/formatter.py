@@ -1,12 +1,12 @@
 from __future__ import annotations
-"""文章排版模块 - 将Markdown文章转换为微信公众号兼容的HTML
+"""文章排版模块 - 将Markdown文章转换为内容平台兼容的HTML
 
 输出两种HTML:
 1. article.html - 完整可预览的HTML（手机预览框架，浏览器直接打开看效果）
-2. article_content.html - 纯内容片段（可直接粘贴到公众号编辑器）
+2. article_content.html - 纯内容片段（可直接粘贴到内容平台编辑器）
 
 v3改进：
-- 精美微信排版样式（参考mdnice风格）
+- 精美内容排版样式（参考mdnice风格）
 - 图片base64内嵌（不依赖外部图床，复制即带图）
 - 去掉卡兹克签名/尾部
 - 去掉质检报告
@@ -18,11 +18,11 @@ from pathlib import Path
 from typing import Optional
 
 
-# ==================== 微信公众号精美排版CSS（多彩渐变风格） ====================
+# ==================== 内容平台精美排版CSS（多彩渐变风格） ====================
 
-WECHAT_CSS = """
+RICH_TEXT_CSS = """
 <style>
-  /* 全局容器 - 微信兼容，所有元素无底色 */
+  /* 全局容器 - 编辑器兼容，所有元素无底色 */
   .rich_media_content {
     font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue",
       "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI",
@@ -167,7 +167,7 @@ WECHAT_CSS = """
     background: transparent !important;
   }
 
-  /* 图片 - 圆角无阴影（微信兼容） */
+  /* 图片 - 圆角无阴影（编辑器兼容） */
   img {
     max-width: 100%;
     height: auto;
@@ -232,7 +232,7 @@ def _image_to_base64(image_path: str) -> str:
     return f'data:{mime};base64,{data}'
 
 
-def markdown_to_wechat_html(
+def markdown_to_platform_html(
     markdown_text: str,
     title: str = "",
     cover_image_url: str = "",
@@ -240,14 +240,14 @@ def markdown_to_wechat_html(
     output_dir: Path = None,
 ) -> str:
     """
-    将Markdown文本转换为微信公众号兼容的HTML片段
-    （用于粘贴到公众号编辑器）
+    将Markdown文本转换为内容平台兼容的HTML片段
+    （用于粘贴到内容平台编辑器）
 
     v4: 图片base64内嵌 + 正文装饰排版（分割线、首尾装饰）
     """
     html = _md_to_html_basic(markdown_text)
 
-    # 封面图不再插入正文（微信封面单独上传）
+    # 封面图不再插入正文（内容封面单独上传）
     # if cover_image_url:
     #     cover_src = cover_image_url
     #     if output_dir and not cover_image_url.startswith(('http', 'data:')):
@@ -283,12 +283,12 @@ def markdown_to_wechat_html(
     # ★ 正文装饰：在h2标题前插入装饰分割线，文章首尾加装饰
     html = _add_decorations(html)
 
-    # ★ 注入inline style确保微信无底色（微信忽略style标签，只认inline style）
+    # ★ 注入inline style确保平台无底色（平台忽略style标签，只认inline style）
     html = _inject_no_background(html)
 
     # 包裹内容区
     full_html = f"""<section class="rich_media_content" style="background:none;">
-{WECHAT_CSS}
+{RICH_TEXT_CSS}
 {html}
 </section>"""
 
@@ -330,7 +330,7 @@ def _remove_khazix_footer(html: str) -> str:
     return html
 
 
-# ==================== 引导图（base64内嵌，微信兼容） ====================
+# ==================== 引导图（base64内嵌，编辑器兼容） ====================
 
 # 引导图路径
 _GUIDES_DIR = Path(__file__).parent.parent / "assets" / "guides"
@@ -356,7 +356,7 @@ def _get_footer_guide_html() -> str:
 </section>"""
 
 
-# ==================== 装饰元素（SVG内联，微信兼容） ====================
+# ==================== 装饰元素（SVG内联，编辑器兼容） ====================
 
 # 开头装饰：多彩花瓣/叶子
 _OPENING_ORNAMENT = """<section style="text-align:center;margin:16px 0 20px;opacity:0.7;">
@@ -474,7 +474,7 @@ def generate_preview_html(
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{title} - 微信公众号文章预览</title>
+    <title>{title} - 内容平台文章预览</title>
     <style>
         * {{
             margin: 0;
@@ -655,7 +655,7 @@ def generate_preview_html(
                 <div class="article-meta">
                     <h1>{title or '文章标题'}</h1>
                     <div class="meta-info">
-                        <span class="author-name">{author or '公众号名称'}</span>
+                        <span class="author-name">{author or '内容账号名称'}</span>
                         <span>{publish_date or '刚刚'}</span>
                     </div>
                 </div>
@@ -667,17 +667,17 @@ def generate_preview_html(
         <div class="tips-panel">
             <h2>如何使用这篇文章</h2>
             <div class="tip-item">
-                <div class="tip-title">方式一：直接复制到公众号编辑器</div>
+                <div class="tip-title">方式一：直接复制到内容平台编辑器</div>
                 <div class="tip-desc">
-                    点击下方按钮复制文章内容，然后在微信公众号编辑器中直接 Ctrl+V 粘贴即可。<br>
-                    图片已内嵌，粘贴后图片会自动上传到微信服务器。
+                    点击下方按钮复制文章内容，然后在内容平台编辑器中直接 Ctrl+V 粘贴即可。<br>
+                    图片已内嵌，粘贴后图片会自动上传到平台服务器。
                 </div>
                 <button class="copy-btn" onclick="copyContent()">复制文章内容</button>
             </div>
             <div class="tip-item">
                 <div class="tip-title">方式二：使用 Web 控制台</div>
                 <div class="tip-desc">
-                    在 Web 控制台点击「HTML」按钮，内容已包含排版和图片，直接粘贴到公众号编辑器。
+                    在 Web 控制台点击「HTML」按钮，内容已包含排版和图片，直接粘贴到内容平台编辑器。
                 </div>
             </div>
         </div>
@@ -844,7 +844,7 @@ def _apply_drop_cap(html: str) -> str:
 
 def _inject_no_background(html: str) -> str:
     """给所有文字元素注入 inline style='background:none;'
-    微信编辑器忽略<style>标签，只认inline style，所以必须逐元素注入
+    富文本编辑器忽略<style>标签，只认inline style，所以必须逐元素注入
     """
     # 需要注入background:none的标签
     tags_to_inject = ['p', 'h1', 'h2', 'h3', 'blockquote', 'strong', 'em',
@@ -966,7 +966,7 @@ def save_article_files(
     with open(preview_path, "w", encoding="utf-8") as f:
         f.write(preview_html)
 
-    # 保存纯内容片段HTML（可直接粘贴到公众号编辑器）
+    # 保存纯内容片段HTML（可直接粘贴到内容平台编辑器）
     content_path = output_dir / "article_content.html"
     with open(content_path, "w", encoding="utf-8") as f:
         f.write(html_content)
@@ -1024,7 +1024,7 @@ if __name__ == "__main__":
 
 结束。
 """
-    content_html = markdown_to_wechat_html(test_md, "测试标题")
+    content_html = markdown_to_platform_html(test_md, "测试标题")
     preview_html = generate_preview_html(content_html, title="测试文章标题")
 
     output = Path("test_output")

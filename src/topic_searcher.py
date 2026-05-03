@@ -1,10 +1,10 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 """
-热门选题搜索模块 - 从今日头条/搜狗微信搜索当日热门选题
+热门选题搜索模块 - 从今日头条/搜狗内容搜索当日热门选题
 
 搜索策略：
 1. 根据赛道关键词，在今日头条搜索热门文章标题
-2. 备选：通过搜狗微信搜索相关文章标题
+2. 备选：通过搜狗内容搜索相关文章标题
 3. 用AI从搜索结果中筛选出最适合该赛道的选题
 """
 import json
@@ -148,10 +148,10 @@ class ToutiaoSearcher:
         return results[:count]
 
 
-# ==================== 搜狗微信搜索 ====================
+# ==================== 搜狗内容搜索 ====================
 
 class WeixinSearcher:
-    """搜狗微信搜索"""
+    """搜狗内容搜索"""
 
     def __init__(self):
         self.session = requests.Session()
@@ -167,7 +167,7 @@ class WeixinSearcher:
 
     def search(self, keyword: str, count: int = 10) -> list[dict]:
         """
-        通过搜狗微信搜索相关文章标题
+        通过搜狗内容搜索相关文章标题
         返回 [{"title": str, "source": "weixin"}, ...]
         """
         results = []
@@ -210,7 +210,7 @@ class WeixinSearcher:
                     })
 
         except Exception as e:
-            print(f"  [WARN] 搜狗微信搜索异常: {e}")
+            print(f"  [WARN] 搜狗内容搜索异常: {e}")
 
         return results[:count]
 
@@ -244,7 +244,7 @@ def search_hot_topics(keywords: list[str], sources: list[str] = None, count: int
                     all_results.append(item)
 
     if "weixin" in sources:
-        print(f"  [SEARCH] 微信搜索: {search_keyword}")
+        print(f"  [SEARCH] 内容搜索: {search_keyword}")
         weixin = WeixinSearcher()
         results = weixin.search(search_keyword, count=count)
         all_results.extend(results)
@@ -289,7 +289,7 @@ def select_best_topic(
         for i, t in enumerate(hot_topics[:15])
     )
 
-    prompt = f"""你是一个微信公众号选题策划专家。
+    prompt = f"""你是一个内容平台选题策划专家。
 
 ## 当前赛道
 赛道名称：{track_name}
@@ -360,8 +360,8 @@ if __name__ == "__main__":
     for h in hot:
         print(f"  {h['title']}")
 
-    # 测试微信搜索
-    print("\n--- 微信搜索: 情感 ---")
+    # 测试内容搜索
+    print("\n--- 内容搜索: 情感 ---")
     weixin = WeixinSearcher()
     results = weixin.search("情感", count=5)
     for r in results:

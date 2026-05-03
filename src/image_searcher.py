@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 """图库搜索模块 - 从Pexels/Pixabay获取免费可商用图片
 
 v2改进：用LLM生成精准英文搜索词，替代硬编码中文→英文映射表
@@ -449,7 +449,7 @@ def generate_cover_image(
     img_url = result.get("original") or result.get("url", "")
 
     if img_url and download_image(img_url, output_path):
-        # 调整尺寸为微信封面比例
+        # 调整尺寸为内容封面比例
         _resize_cover(output_path)
         print(f"  [OK] 封面图已保存: {output_path}")
         if result.get("photographer"):
@@ -499,7 +499,7 @@ def generate_inline_image(
 
 
 def _resize_cover(image_path: Path) -> None:
-    """将封面图裁剪为微信2.35:1比例"""
+    """将封面图裁剪为平台2.35:1比例"""
     try:
         from PIL import Image
 

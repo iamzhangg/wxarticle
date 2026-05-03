@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -512,7 +512,7 @@
         }
     });
 
-    // ============ 复制排版HTML（富文本，可直接粘贴到微信编辑器） ============
+    // ============ 复制排版HTML（富文本，可直接粘贴到富文本编辑器） ============
     async function copyHtml(articleId, btnEl) {
         const origText = btnEl ? btnEl.textContent : '';
         if (btnEl) { btnEl.disabled = true; btnEl.textContent = '复制中...'; }
@@ -536,7 +536,7 @@
 
             try {
                 document.execCommand('copy');
-                showToast('已复制！可直接粘贴到微信公众号编辑器', 'success');
+                showToast('已复制！可直接粘贴到内容平台编辑器', 'success');
             } catch (e) {
                 showToast('复制失败，请手动操作', 'error');
             } finally {
@@ -602,7 +602,7 @@
             }
             document.getElementById('previewBody').innerHTML = bodyHtml;
             document.getElementById('previewFooter').innerHTML = `
-                <button class="btn btn-primary" onclick="copyHtml('${articleId}', this)">复制到微信</button>
+                <button class="btn btn-primary" onclick="copyHtml('${articleId}', this)">复制排版</button>
                 <button class="btn btn-success" onclick="copySummary('${articleId}', this)">复制简介</button>
             `;
             document.getElementById('previewModal').style.display = 'flex';

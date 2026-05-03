@@ -79,7 +79,7 @@ def generate_cover_image(
                     output_path = output_dir / "cover.jpg"
                     with open(output_path, "wb") as f:
                         f.write(img_response.content)
-                    # 裁剪为微信2.35:1比例
+                    # 裁剪为平台2.35:1比例
                     _resize_cover(output_path)
                     print(f"  [OK] 封面图已保存: {output_path}")
                     return output_path
@@ -89,7 +89,7 @@ def generate_cover_image(
                 output_path = output_dir / "cover.jpg"
                 with open(output_path, "wb") as f:
                     f.write(img_bytes)
-                # 裁剪为微信2.35:1比例
+                # 裁剪为平台2.35:1比例
                 _resize_cover(output_path)
                 print(f"  [OK] 封面图已保存: {output_path}")
                 return output_path
@@ -148,7 +148,7 @@ def _generate_cover_fallback(prompt: str, output_dir: Path) -> Optional[Path]:
 
 
 def _resize_cover(image_path: Path) -> None:
-    """将封面图裁剪为微信2.35:1比例（900x383）"""
+    """将封面图裁剪为平台2.35:1比例（900x383）"""
     try:
         from PIL import Image
 
@@ -389,13 +389,13 @@ def generate_inline_image(
             f"{english_desc}. "
             f"Watercolor or flat design style, soft colors, "
             f"no text, no words, no letters, no Chinese characters, no watermark. "
-            f"Clean and professional, suitable for WeChat article."
+            f"Clean and professional, suitable for content article."
         )
     else:
         prompt = (
             f"An elegant illustration for a Chinese article section about: {section_title[:40]}. "
             f"Watercolor or flat design style, soft colors, no text, no words, no letters, no Chinese characters. "
-            f"Clean and professional, suitable for WeChat article."
+            f"Clean and professional, suitable for content article."
         )
 
     try:

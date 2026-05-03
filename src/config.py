@@ -44,7 +44,7 @@ IMAGE_SOURCE = os.getenv("IMAGE_SOURCE", _yaml_gen_config.get("image_source", "s
 
 # 封面图配置
 COVER_WIDTH = 900
-COVER_HEIGHT = 383  # 微信公众号2.35:1比例
+COVER_HEIGHT = 383  # 内容平台2.35:1比例
 
 # 文章生成配置（默认值，可被config.yaml覆盖）
 MAX_REFERENCE_ARTICLES = 5
@@ -57,7 +57,7 @@ MAX_SIMILARITY = 0.10
 MIN_CHARS_BETWEEN_IMAGES = int(os.getenv("MIN_CHARS_BETWEEN_IMAGES", _yaml_gen_config.get("min_chars_between_images", "300")))
 INLINE_IMAGE_COUNT = int(os.getenv("INLINE_IMAGE_COUNT", _yaml_gen_config.get("inline_image_count", "3")))
 
-# 公众号抓取配置（v1遗留，v2不再使用）
+# 内容抓取配置（v1遗留，v2不再使用）
 DEFAULT_ACCOUNT = os.getenv("DEFAULT_ACCOUNT", "")
 SCRAPE_MAX_ARTICLES = int(os.getenv("SCRAPE_MAX_ARTICLES", "5"))
 SCRAPE_INTERVAL = int(os.getenv("SCRAPE_INTERVAL", "86400"))

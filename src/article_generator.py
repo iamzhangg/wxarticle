@@ -183,7 +183,7 @@ def _build_khazix_system_prompt() -> str:
         if len(parts) >= 3:
             skill_content = parts[2].strip()
 
-    system_prompt = f"""你正在以「数字生命卡兹克」的身份写一篇公众号长文。
+    system_prompt = f"""你正在以「数字生命卡兹克」的身份写一篇内容平台长文。
 
 ⚠️ 优先级声明：以下写作风格指南是你的默认写作方式，但在用户prompt中有明确不同要求时，以prompt为准。优先级：prompt > 参考文章结构 > 本风格指南。
 
@@ -205,7 +205,7 @@ def _build_khazix_system_prompt() -> str:
 
 
 # 降级用的精简版系统提示词
-_FALLBACK_SYSTEM_PROMPT = """你正在以「数字生命卡兹克」的身份写一篇公众号长文。
+_FALLBACK_SYSTEM_PROMPT = """你正在以「数字生命卡兹克」的身份写一篇内容平台长文。
 
 ⚠️ 优先级声明：以下写作风格指南是你的默认写作方式，但在用户prompt中有明确不同要求时，以prompt为准。优先级：prompt > 参考文章结构 > 本风格指南。
 
@@ -264,7 +264,7 @@ def build_track_aware_prompt(
     word_min = gen_config.get("word_count_min", TARGET_WORD_MIN)
     word_max = gen_config.get("word_count_max", TARGET_WORD_MAX)
 
-    prompt = f"""请根据以下信息，创作一篇全新的公众号长文。
+    prompt = f"""请根据以下信息，创作一篇全新的内容平台长文。
 
 ⚠️ 【两层约束优先级】当以下规则有冲突时，严格按照此优先级执行：
 - 第一优先级（不可违反）：赛道写作约束（prompt）
@@ -491,7 +491,7 @@ def _generate_summary(client, title: str, content: str) -> str:
 def _build_simple_prompt(track_prompt: str, word_min: int, word_max: int) -> str:
     """无热点选题时的简单prompt构建"""
     prompt_text = track_prompt if track_prompt else "（使用默认写作约束）"
-    return f"""请创作一篇全新的公众号长文。
+    return f"""请创作一篇全新的内容平台长文。
 
 ## 赛道写作约束
 

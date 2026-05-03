@@ -1,7 +1,7 @@
 from __future__ import annotations
 #!/usr/bin/env python3
 """
-wxarticle v2 - 微信公众号文章自动生成工具（赛道制）
+wxarticle v2 - 内容平台文章自动生成工具（赛道制）
 
 主流程：
 1. 读取所有启用的赛道（config.yaml）
@@ -53,7 +53,7 @@ from track_manager import (
 )
 from topic_searcher import search_hot_topics, select_best_topic
 from article_generator import generate_article
-from formatter import markdown_to_wechat_html, save_article_files, generate_preview_html
+from formatter import markdown_to_platform_html, save_article_files, generate_preview_html
 
 # 根据图片来源配置选择模块
 if IMAGE_SOURCE == "ai":
@@ -270,10 +270,10 @@ def process_track(
                 break
 
         # ========== Step 5: 排版HTML（图片base64内嵌，不需要图床） ==========
-        print(f"\n📐 Step 5: 排版为微信公众号HTML...")
+        print(f"\n📐 Step 5: 排版为内容平台HTML...")
 
         cover_url = str(cover_path) if cover_path else ""
-        html_content = markdown_to_wechat_html(
+        html_content = markdown_to_platform_html(
             article["raw_markdown"],
             title=article["title"],
             cover_image_url=cover_url,
@@ -284,7 +284,7 @@ def process_track(
     else:
         # dry-run模式
         cover_url = ""
-        html_content = markdown_to_wechat_html(
+        html_content = markdown_to_platform_html(
             article["raw_markdown"],
             title=article["title"],
             cover_image_url="",
@@ -332,7 +332,7 @@ def main(
     start_time = time.time()
 
     print("=" * 60)
-    print("[BELL] wxarticle v2 - 微信公众号文章自动生成（赛道制）")
+    print("[BELL] wxarticle v2 - 内容平台文章自动生成（赛道制）")
     print(f"   {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 60)
 
@@ -390,7 +390,7 @@ def main(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="wxarticle v2 - 微信公众号文章自动生成（赛道制）")
+    parser = argparse.ArgumentParser(description="wxarticle v2 - 内容平台文章自动生成（赛道制）")
     parser.add_argument("--track", type=str, default="", help="只运行指定赛道")
     parser.add_argument("--dry-run", action="store_true", help="测试模式，不调用API")
     parser.add_argument("--skip-search", action="store_true", help="跳过选题搜索，用默认选题")
