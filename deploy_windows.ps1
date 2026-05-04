@@ -1,4 +1,4 @@
-# wxarticle Deploy Script - Windows Server (宝塔面板)
+# wxarticle Deploy Script - Windows Server
 # Run in PowerShell as Administrator
 # Fresh install: .\deploy_windows.ps1
 # Update only:   .\deploy_windows.ps1 -Update
