@@ -9,9 +9,71 @@ param([switch]$Update)
 $ErrorActionPreference = "Stop"
 $ProjectDir = "C:\wxarticle"
 $RepoUrl = "https://github.com/iamzhangg/wxarticle.git"
+$ZipUrls = @(
+    "https://github.com/iamzhangg/wxarticle/archive/refs/heads/master.zip",
+    "https://ghfast.top/https://github.com/iamzhangg/wxarticle/archive/refs/heads/master.zip",
+    "https://ghproxy.net/https://github.com/iamzhangg/wxarticle/archive/refs/heads/master.zip"
+)
 $PipIndexUrl = "https://pypi.tuna.tsinghua.edu.cn/simple"
 $ServiceHost = "127.0.0.1"
 $ServicePort = 8080
+
+function Download-FirstAvailable {
+    param(
+        [string[]]$Urls,
+        [string]$OutFile
+    )
+
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    foreach ($url in $Urls) {
+        try {
+            Write-Host "  Downloading: $url" -ForegroundColor Gray
+            Invoke-WebRequest $url -OutFile $OutFile -UseBasicParsing -TimeoutSec 120
+            return
+        } catch {
+            Write-Host "  Download failed, trying next..." -ForegroundColor Yellow
+        }
+    }
+    throw "All download URLs failed"
+}
+
+function Install-FromZip {
+    param([string]$TargetDir)
+
+    $oldEnv = $null
+    if (Test-Path "$TargetDir\.env") {
+        Write-Host "  Backing up old .env..." -ForegroundColor Yellow
+        $oldEnv = Get-Content "$TargetDir\.env" -Raw
+    }
+
+    $zip = "$env:TEMP\wxarticle-master.zip"
+    $extractDir = "$env:TEMP\wxarticle-extract"
+    Remove-Item $zip -Force -ErrorAction SilentlyContinue
+    Remove-Item $extractDir -Recurse -Force -ErrorAction SilentlyContinue
+
+    Download-FirstAvailable -Urls $ZipUrls -OutFile $zip
+    Expand-Archive -Path $zip -DestinationPath $extractDir -Force
+
+    $sourceDir = Get-ChildItem $extractDir -Directory | Select-Object -First 1
+    if (-not $sourceDir) {
+        throw "Downloaded archive has no project directory"
+    }
+
+    if (Test-Path $TargetDir) {
+        Write-Host "  Removing old project..." -ForegroundColor Yellow
+        Remove-Item $TargetDir -Recurse -Force
+    }
+
+    Move-Item $sourceDir.FullName $TargetDir
+
+    if ($oldEnv) {
+        Write-Host "  Restoring .env..." -ForegroundColor Yellow
+        Set-Content -Path "$TargetDir\.env" -Value $oldEnv -Encoding ASCII
+    }
+
+    Set-Location $TargetDir
+    Write-Host "  Code ready from ZIP" -ForegroundColor Green
+}
 
 Write-Host "=====================================" -ForegroundColor Cyan
 if ($Update) {
@@ -23,15 +85,13 @@ Write-Host "=====================================" -ForegroundColor Cyan
 
 # ============ Step 1: Check Git ============
 Write-Host "`n[1/6] Checking Git..." -ForegroundColor Yellow
-try { git --version | Out-Null; Write-Host "  Git OK" -ForegroundColor Green }
-catch {
-    Write-Host "  Installing Git..." -ForegroundColor Yellow
-    $g = "$env:TEMP\git-install.exe"
-    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-    Invoke-WebRequest "https://github.com/git-for-windows/git/releases/download/v2.49.0.windows.1/Git-2.49.0-64-bit.exe" -OutFile $g -UseBasicParsing
-    Start-Process $g -ArgumentList "/VERYSILENT /NORESTART /SP-" -Wait
-    $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
-    Write-Host "  Git installed" -ForegroundColor Green
+$GitAvailable = $false
+try {
+    git --version | Out-Null
+    $GitAvailable = $true
+    Write-Host "  Git OK" -ForegroundColor Green
+} catch {
+    Write-Host "  Git not found, will use ZIP download instead" -ForegroundColor Yellow
 }
 
 # ============ Step 2: Check Python ============
@@ -58,7 +118,7 @@ if (Test-Path "$ProjectDir\venv\Scripts\python.exe") {
 
 # ============ Step 3: Get/Update Code ============
 Write-Host "`n[3/6] Code..." -ForegroundColor Yellow
-if ($Update -and (Test-Path "$ProjectDir\.git")) {
+if ($Update -and $GitAvailable -and (Test-Path "$ProjectDir\.git")) {
     Set-Location $ProjectDir
     Write-Host "  Stopping service..." -ForegroundColor Yellow
     Stop-Process -Name "python" -Force -ErrorAction SilentlyContinue
@@ -66,25 +126,14 @@ if ($Update -and (Test-Path "$ProjectDir\.git")) {
     Write-Host "  git pull..." -ForegroundColor Yellow
     git pull origin master 2>&1 | Write-Host
     Write-Host "  Code updated" -ForegroundColor Green
-} elseif (Test-Path $ProjectDir) {
-    Write-Host "  Backing up old .env..." -ForegroundColor Yellow
-    $oldEnv = $null
-    if (Test-Path "$ProjectDir\.env") { $oldEnv = Get-Content "$ProjectDir\.env" -Raw }
-    Write-Host "  Removing old project..." -ForegroundColor Yellow
-    Remove-Item $ProjectDir -Recurse -Force
+} elseif ($GitAvailable -and -not (Test-Path $ProjectDir)) {
     Write-Host "  Cloning..." -ForegroundColor Yellow
     git clone $RepoUrl $ProjectDir 2>&1 | Write-Host
     Set-Location $ProjectDir
-    if ($oldEnv) {
-        Write-Host "  Restoring .env..." -ForegroundColor Yellow
-        Set-Content -Path "$ProjectDir\.env" -Value $oldEnv -Encoding ASCII
-    }
-    Write-Host "  Fresh clone done" -ForegroundColor Green
+    Write-Host "  Code ready from Git" -ForegroundColor Green
 } else {
-    Write-Host "  Cloning..." -ForegroundColor Yellow
-    git clone $RepoUrl $ProjectDir 2>&1 | Write-Host
-    Set-Location $ProjectDir
-    Write-Host "  Clone done" -ForegroundColor Green
+    Write-Host "  Downloading project ZIP..." -ForegroundColor Yellow
+    Install-FromZip -TargetDir $ProjectDir
 }
 
 # ============ Step 4: Venv + Dependencies ============
@@ -152,7 +201,7 @@ if (-not $proc.HasExited) {
     Write-Host "  Restart:.\restart.bat" -ForegroundColor Gray
     Write-Host "" -ForegroundColor Gray
     Write-Host "  Next:   Edit C:\wxarticle\.env and restart" -ForegroundColor Yellow
-    Write-Host "  BaoTa:  Reverse proxy public site to http://127.0.0.1:$ServicePort" -ForegroundColor Yellow
+    Write-Host "  Proxy:  Reverse proxy public site to http://127.0.0.1:$ServicePort" -ForegroundColor Yellow
     Write-Host "          Add auth/firewall rules before exposing it to the internet." -ForegroundColor Yellow
 } else {
     Write-Host "`n  [WARN] Service exited immediately. Check:" -ForegroundColor Red
