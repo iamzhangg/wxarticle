@@ -62,10 +62,38 @@ function Install-FromZip {
     if (Test-Path $TargetDir) {
         Write-Host "  Removing old project..." -ForegroundColor Yellow
         Set-Location $env:TEMP
-        Remove-Item $TargetDir -Recurse -Force
+        $removed = $false
+        for ($i = 1; $i -le 3; $i++) {
+            try {
+                Remove-Item $TargetDir -Recurse -Force
+                $removed = $true
+                break
+            } catch {
+                Write-Host "  Remove attempt $i failed, retrying..." -ForegroundColor Yellow
+                Start-Sleep -Seconds 2
+            }
+        }
+        if (-not $removed) {
+            throw "Failed to remove old project at $TargetDir"
+        }
     }
 
-    Move-Item $sourceDir.FullName $TargetDir
+    Write-Host "  Copying project files..." -ForegroundColor Yellow
+    New-Item -ItemType Directory -Path $TargetDir -Force | Out-Null
+    $copied = $false
+    for ($i = 1; $i -le 3; $i++) {
+        try {
+            Copy-Item -Path (Join-Path $sourceDir.FullName "*") -Destination $TargetDir -Recurse -Force
+            $copied = $true
+            break
+        } catch {
+            Write-Host "  Copy attempt $i failed, retrying..." -ForegroundColor Yellow
+            Start-Sleep -Seconds 2
+        }
+    }
+    if (-not $copied) {
+        throw "Failed to copy project files to $TargetDir"
+    }
 
     if ($oldEnv) {
         Write-Host "  Restoring .env..." -ForegroundColor Yellow
