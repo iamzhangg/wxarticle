@@ -61,6 +61,7 @@ function Install-FromZip {
 
     if (Test-Path $TargetDir) {
         Write-Host "  Removing old project..." -ForegroundColor Yellow
+        Set-Location $env:TEMP
         Remove-Item $TargetDir -Recurse -Force
     }
 
