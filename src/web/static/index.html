@@ -167,12 +167,28 @@
             font-size: 12px; color: #8b5cf6; margin-top: 4px;
             overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
         }
+        .article-error-reason {
+            font-size: 12px; color: #b91c1c; margin-top: 4px;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
         .article-meta {
             font-size: 12px; color: var(--text-secondary); margin-top: 4px;
             display: flex; gap: 12px;
         }
 
         .article-actions { display: flex; gap: 6px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
+        .history-log {
+            margin-top: 12px; padding: 12px; border: 1px solid var(--border); border-radius: 8px;
+            background: #0f172a; color: #e2e8f0; font-size: 12px; line-height: 1.6;
+            white-space: pre-wrap; overflow-x: auto; max-height: 220px;
+        }
+        .status-pill {
+            flex-shrink: 0; padding: 4px 10px; border-radius: 20px;
+            font-size: 12px; font-weight: 600; min-width: 72px; text-align: center;
+        }
+        .status-success { background: #dcfce7; color: #15803d; }
+        .status-partial { background: #fef3c7; color: #b45309; }
+        .status-failed { background: #fee2e2; color: #b91c1c; }
 
         /* 设置页面 */
         .settings-section { margin-bottom: 24px; }
@@ -272,6 +288,27 @@
         .card-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
         .card-header h2 { font-size: 16px; font-weight: 600; }
         .card-body { padding: 20px; }
+        .auth-screen {
+            min-height: 100vh; display: flex; align-items: center; justify-content: center;
+            padding: 24px; background: #eef2ff;
+        }
+        .auth-panel {
+            width: 100%; max-width: 380px; background: var(--card); border: 1px solid var(--border);
+            border-radius: 8px; box-shadow: var(--shadow-md); padding: 24px;
+        }
+        .auth-panel h1 { font-size: 22px; margin-bottom: 6px; }
+        .auth-panel p { color: var(--text-secondary); font-size: 13px; margin-bottom: 18px; }
+        .auth-tabs { display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-bottom: 16px; }
+        .auth-tab { flex: 1; border: none; background: var(--card); padding: 8px; cursor: pointer; color: var(--text-secondary); }
+        .auth-tab.active { background: var(--primary); color: white; }
+        .form-field { margin-bottom: 12px; }
+        .form-field label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; }
+        .form-field input {
+            width: 100%; padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px;
+        }
+        .account-chip { color: var(--text-secondary); font-size: 13px; padding: 0 4px; }
+        .api-key-row { display: flex; gap: 8px; align-items: center; }
+        .api-key-row input { flex: 1; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; }
 
         /* 响应式 */
         @media (max-width: 768px) {
@@ -283,17 +320,41 @@
 </head>
 <body>
 
+<!-- 登录页 -->
+<div id="authScreen" class="auth-screen">
+    <div class="auth-panel">
+        <h1>wxarticle</h1>
+        <p>登录后进入你的独立文章仓库和生成设置。</p>
+        <div class="auth-tabs">
+            <button class="auth-tab active" id="loginTab" onclick="setAuthMode('login')">登录</button>
+            <button class="auth-tab" id="registerTab" onclick="setAuthMode('register')">注册</button>
+        </div>
+        <div class="form-field">
+            <label for="authUsername">用户名</label>
+            <input id="authUsername" autocomplete="username" placeholder="gio">
+        </div>
+        <div class="form-field">
+            <label for="authPassword">密码</label>
+            <input id="authPassword" type="password" autocomplete="current-password" placeholder="至少 8 位">
+        </div>
+        <button class="btn btn-primary" style="width:100%;justify-content:center;" onclick="submitAuth()" id="authSubmit">登录</button>
+    </div>
+</div>
+
 <!-- 导航栏 -->
-<nav class="navbar">
+<nav class="navbar" id="appNav" style="display:none;">
     <div class="navbar-brand">
         <div class="logo">W</div>
         <span>wxarticle</span>
     </div>
     <div class="navbar-nav">
         <button class="nav-btn active" onclick="showPage('dashboard')">文章仓库</button>
+        <button class="nav-btn" onclick="showPage('trash')">回收站</button>
+        <button class="nav-btn" onclick="showPage('history')">生成历史</button>
         <button class="nav-btn" onclick="showPage('settings')">设置</button>
     </div>
     <div class="navbar-actions" style="position: relative;">
+        <span class="account-chip" id="accountChip"></span>
         <div class="gen-btn-group">
             <button class="gen-btn-main" id="generateBtn" onclick="triggerGenerate('')">
                 生成
@@ -301,6 +362,7 @@
             <button class="gen-btn-dropdown" onclick="toggleGenMenu()">▼</button>
         </div>
         <div class="dropdown-menu" id="genMenu"></div>
+        <button class="btn btn-ghost" onclick="logout()">退出</button>
     </div>
 </nav>
 
@@ -308,11 +370,19 @@
 <div class="toast-container" id="toastContainer"></div>
 
 <!-- 主内容 -->
-<div class="main-content">
+<div class="main-content" id="appMain" style="display:none;">
     <!-- 仓库页面 -->
     <div id="dashboardPage">
         <div class="filter-bar" id="filterBar"></div>
         <div id="articleList"></div>
+    </div>
+    <div id="trashPage" style="display:none;">
+        <div class="filter-bar" id="trashFilterBar"></div>
+        <div id="trashList"></div>
+    </div>
+    <div id="historyPage" style="display:none;">
+        <div class="filter-bar" id="historyFilterBar"></div>
+        <div id="historyList"></div>
     </div>
 
     <!-- 设置页面 -->
@@ -329,6 +399,14 @@
             <div class="card-header"><h2>生成设置</h2></div>
             <div class="card-body" id="generationSettings"></div>
         </div>
+        <div class="card" style="margin-bottom: 20px;">
+            <div class="card-header"><h2>硅基流动 API Key</h2></div>
+            <div class="card-body" id="apiKeySettings"></div>
+        </div>
+        <div class="card" style="margin-bottom: 20px;">
+            <div class="card-header"><h2>Pexels API Key</h2></div>
+            <div class="card-body" id="pexelsApiKeySettings"></div>
+        </div>
         <div style="text-align: right;">
             <button class="btn btn-primary" onclick="saveSettings()">保存设置</button>
         </div>
@@ -336,14 +414,25 @@
 </div>
 
 <!-- 预览弹窗 -->
-<div id="previewModal" class="modal-overlay" style="display:none;" onclick="closePreview(event)">
-    <div class="modal">
-        <div class="modal-header">
-            <h2 id="previewTitle">文章预览</h2>
-            <button class="btn-ghost" onclick="closePreview()">X</button>
+    <div id="previewModal" class="modal-overlay" style="display:none;" onclick="closePreview(event)">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 id="previewTitle">文章预览</h2>
+                <button class="btn-ghost" onclick="closePreview()">X</button>
         </div>
         <div class="modal-body" id="previewBody"></div>
         <div class="modal-footer" id="previewFooter"></div>
+    </div>
+</div>
+
+<div id="historyDetailModal" class="modal-overlay" style="display:none;" onclick="closeHistoryDetail(event)">
+    <div class="modal">
+        <div class="modal-header">
+            <h2 id="historyDetailTitle">生成详情</h2>
+            <button class="btn-ghost" onclick="closeHistoryDetail()">X</button>
+        </div>
+        <div class="modal-body" id="historyDetailBody"></div>
+        <div class="modal-footer" id="historyDetailFooter"></div>
     </div>
 </div>
 
@@ -352,7 +441,89 @@
     let currentPage = 'dashboard';
     let currentSettings = null;
     let currentFilter = 'all'; // 赛道筛选
+    let currentHistoryFilter = 'all';
+    let currentHistoryTrackFilter = 'all';
     let allArticles = [];
+    let allTrashArticles = [];
+    let generationHistory = [];
+    let currentUser = null;
+    let authMode = 'login';
+
+    async function apiFetch(url, options = {}) {
+        const resp = await fetch(url, options);
+        if (resp.status === 401) showAuthScreen();
+        return resp;
+    }
+
+    function setAuthMode(mode) {
+        authMode = mode;
+        document.getElementById('loginTab').classList.toggle('active', mode === 'login');
+        document.getElementById('registerTab').classList.toggle('active', mode === 'register');
+        document.getElementById('authSubmit').textContent = mode === 'login' ? '登录' : '注册';
+    }
+
+    function showAuthScreen() {
+        currentUser = null;
+        document.getElementById('authScreen').style.display = 'flex';
+        document.getElementById('appNav').style.display = 'none';
+        document.getElementById('appMain').style.display = 'none';
+    }
+
+    function showApp() {
+        document.getElementById('authScreen').style.display = 'none';
+        document.getElementById('appNav').style.display = 'flex';
+        document.getElementById('appMain').style.display = '';
+        document.getElementById('accountChip').textContent = currentUser ? currentUser.username : '';
+    }
+
+    async function submitAuth() {
+        const username = document.getElementById('authUsername').value.trim();
+        const password = document.getElementById('authPassword').value;
+        if (!username || !password) {
+            showToast('请输入用户名和密码', 'error');
+            return;
+        }
+        try {
+            const resp = await fetch(`/api/auth/${authMode}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password }),
+            });
+            const data = await resp.json();
+            if (!resp.ok) {
+                showToast(data.detail || '登录失败', 'error');
+                return;
+            }
+            currentUser = data.user;
+            showApp();
+            await loadArticles();
+            await loadSettings();
+        } catch (e) {
+            showToast('请求失败: ' + e.message, 'error');
+        }
+    }
+
+    async function logout() {
+        await fetch('/api/auth/logout', { method: 'POST' });
+        showAuthScreen();
+    }
+
+    async function bootstrapAuth() {
+        try {
+            const resp = await fetch('/api/auth/me');
+            if (!resp.ok) {
+                showAuthScreen();
+                return;
+            }
+            const data = await resp.json();
+            currentUser = data.user;
+            showApp();
+            await loadArticles();
+            await loadSettings();
+        } catch {
+            showAuthScreen();
+        }
+    }
 
     // ============ 通用复制（兼容HTTP） ============
     function formatTime(isoStr) {
@@ -389,22 +560,46 @@
             }
         });
     }
+    function escapeHtml(value) {
+        return String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+    function escapeAttr(value) {
+        return escapeHtml(value).replace(/`/g, '&#96;');
+    }
+    function jsArg(value) {
+        return JSON.stringify(String(value ?? ''));
+    }
 
     // ============ 页面切换 ============
     function showPage(page) {
         currentPage = page;
         document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
-        event.target.classList.add('active');
+        const navButtons = Array.from(document.querySelectorAll('.nav-btn'));
+        const eventTarget = (typeof event !== 'undefined' && event.target) ? event.target : null;
+        const activeButton = eventTarget?.classList?.contains('nav-btn')
+            ? eventTarget
+            : navButtons.find(btn => btn.getAttribute('onclick')?.includes(`'${page}'`));
+        if (activeButton) activeButton.classList.add('active');
         document.getElementById('dashboardPage').style.display = page === 'dashboard' ? '' : 'none';
+        document.getElementById('trashPage').style.display = page === 'trash' ? '' : 'none';
+        document.getElementById('historyPage').style.display = page === 'history' ? '' : 'none';
         document.getElementById('settingsPage').style.display = page === 'settings' ? '' : 'none';
         if (page === 'dashboard') loadArticles();
+        if (page === 'trash') loadTrashArticles();
+        if (page === 'history') loadGenerationHistory();
         if (page === 'settings') loadSettings();
     }
 
     // ============ 文章列表 ============
     async function loadArticles() {
         try {
-            const resp = await fetch('/api/articles');
+            const resp = await apiFetch('/api/articles');
+            if (!resp.ok) return;
             const data = await resp.json();
             allArticles = data.articles || [];
             renderFilterBar();
@@ -413,6 +608,34 @@
             document.getElementById('articleList').innerHTML = `
                 <div class="empty-state"><div class="icon">!</div>
                 <h3>加载失败</h3><p>${e.message}</p></div>`;
+        }
+    }
+
+    async function loadTrashArticles() {
+        try {
+            const resp = await apiFetch('/api/articles/trash');
+            if (!resp.ok) return;
+            const data = await resp.json();
+            allTrashArticles = data.articles || [];
+            renderTrashArticles();
+        } catch (e) {
+            document.getElementById('trashList').innerHTML = `
+                <div class="empty-state"><div class="icon">!</div>
+                <h3>加载失败</h3><p>${escapeHtml(e.message)}</p></div>`;
+        }
+    }
+
+    async function loadGenerationHistory() {
+        try {
+            const resp = await apiFetch('/api/articles/history');
+            if (!resp.ok) return;
+            const data = await resp.json();
+            generationHistory = data.history || [];
+            renderGenerationHistory();
+        } catch (e) {
+            document.getElementById('historyList').innerHTML = `
+                <div class="empty-state"><div class="icon">!</div>
+                <h3>加载失败</h3><p>${escapeHtml(e.message)}</p></div>`;
         }
     }
 
@@ -425,10 +648,292 @@
         let html = `<button class="filter-btn ${currentFilter === 'all' ? 'active' : ''}"
                      onclick="setFilter('all')">全部</button>`;
         for (const track of allTracks) {
+            const safeTrack = escapeHtml(track);
             html += `<button class="filter-btn ${currentFilter === track ? 'active' : ''}"
-                      onclick="setFilter('${track}')">${track}</button>`;
+                      onclick="setFilter(${jsArg(track)})">${safeTrack}</button>`;
         }
         document.getElementById('filterBar').innerHTML = html;
+    }
+
+    function renderTrashArticles() {
+        if (allTrashArticles.length === 0) {
+            document.getElementById('trashList').innerHTML = `
+                <div class="empty-state"><div class="icon">W</div>
+                <h3>回收站为空</h3><p>被移走的文章会出现在这里</p></div>`;
+            return;
+        }
+
+        let html = '';
+        for (const article of allTrashArticles) {
+            const articleId = article.id.replace(/^trash\//, '');
+            html += `
+            <div class="article-card failed">
+                <span class="article-track-badge track-${escapeAttr(article.track || '')}">${escapeHtml(article.track || '')}</span>
+                <div class="article-info">
+                    <div class="article-title">🗑 ${escapeHtml(article.title || '未命名')}</div>
+                    <div class="article-summary">${escapeHtml(article.summary || '暂无简介')}</div>
+                    <div class="article-meta">
+                        <span>${escapeHtml(formatTime(article.generated_at))}</span>
+                        <span>回收站</span>
+                    </div>
+                </div>
+                <div class="article-actions">
+                    <button class="btn btn-sm btn-primary" onclick="restoreArticle(${jsArg(articleId)})">恢复</button>
+                    <button class="btn btn-sm btn-danger" onclick="purgeTrashArticle(${jsArg(articleId)})">彻底删除</button>
+                </div>
+            </div>`;
+        }
+        document.getElementById('trashList').innerHTML = html;
+    }
+
+    function renderGenerationHistory() {
+        renderHistoryFilterBar();
+        const filteredHistory = generationHistory.filter(record => {
+            const statusOk = currentHistoryFilter === 'all'
+                || (record.status || 'failed') === currentHistoryFilter;
+            const trackOk = currentHistoryTrackFilter === 'all'
+                || (record.track_name || '') === currentHistoryTrackFilter;
+            return statusOk && trackOk;
+        });
+
+        if (generationHistory.length === 0) {
+            document.getElementById('historyList').innerHTML = `
+                <div class="empty-state"><div class="icon">W</div>
+                <h3>暂无生成历史</h3><p>每次生成结束后会自动记录到这里</p></div>`;
+            return;
+        }
+        if (filteredHistory.length === 0) {
+            document.getElementById('historyList').innerHTML = `
+                <div class="empty-state"><div class="icon">W</div>
+                <h3>没有匹配记录</h3><p>换一个状态筛选看看</p></div>`;
+            return;
+        }
+
+        let html = '';
+        for (const record of filteredHistory) {
+            const status = record.status || 'failed';
+            const title = status === 'success' ? '成功' : status === 'partial_success' ? '部分成功' : '失败';
+            const statusClass = status === 'success' ? 'status-success' : status === 'partial_success' ? 'status-partial' : 'status-failed';
+            const recordId = record.id || '';
+            const failureStageLabel = record.failure_stage ? formatFailureStage(record.failure_stage) : '';
+            html += `
+            <div class="article-card ${status === 'success' ? '' : 'failed'}">
+                <span class="status-pill ${statusClass}">${escapeHtml(title)}</span>
+                <div class="article-info">
+                    <div class="article-title">${escapeHtml(formatHistoryTitle(record))}</div>
+                    <div class="article-summary">${escapeHtml(record.progress || '')}</div>
+                    <div class="article-meta">
+                        <span>${escapeHtml(formatTime(record.started_at))}</span>
+                        <span>${escapeHtml(formatTime(record.finished_at))}</span>
+                        <span>${record.success_count || 0}/${record.total_tasks || 0}</span>
+                    </div>
+                    ${failureStageLabel ? `<div class="article-error-reason">阶段：${escapeHtml(failureStageLabel)}</div>` : ''}
+                    ${record.failure_summary ? `<div class="article-error-reason">${escapeHtml(record.failure_summary)}</div>` : ''}
+                </div>
+                <div class="article-actions">
+                    <button class="btn btn-sm btn-outline" onclick="showHistoryDetail(${jsArg(recordId)})">详情</button>
+                </div>
+            </div>`;
+        }
+        document.getElementById('historyList').innerHTML = html;
+    }
+
+    function renderHistoryFilterBar() {
+        const trackCounts = {};
+        for (const record of generationHistory) {
+            const track = record.track_name || '未命名';
+            trackCounts[track] = (trackCounts[track] || 0) + 1;
+        }
+        const counts = {
+            all: generationHistory.length,
+            success: generationHistory.filter(r => r.status === 'success').length,
+            partial_success: generationHistory.filter(r => r.status === 'partial_success').length,
+            failed: generationHistory.filter(r => (r.status || 'failed') === 'failed').length,
+        };
+        const filters = [
+            ['all', `全部 ${counts.all}`],
+            ['success', `成功 ${counts.success}`],
+            ['partial_success', `部分成功 ${counts.partial_success}`],
+            ['failed', `失败 ${counts.failed}`],
+        ];
+        const trackFilters = Object.entries(trackCounts)
+            .sort((a, b) => b[1] - a[1])
+            .map(([track, count]) => [
+                track,
+                `${track} ${count}`,
+            ]);
+        document.getElementById('historyFilterBar').innerHTML = `
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                ${filters.map(([value, label]) => `
+                    <button class="filter-btn ${currentHistoryFilter === value ? 'active' : ''}"
+                            onclick="setHistoryFilter(${jsArg(value)})">${escapeHtml(label)}</button>
+                `).join('')}
+            </div>
+            ${trackFilters.length ? `
+                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+                    <button class="filter-btn ${currentHistoryTrackFilter === 'all' ? 'active' : ''}"
+                            onclick="setHistoryTrackFilter('all')">全部赛道</button>
+                    ${trackFilters.map(([track, label]) => `
+                        <button class="filter-btn ${currentHistoryTrackFilter === track ? 'active' : ''}"
+                                onclick="setHistoryTrackFilter(${jsArg(track)})">${escapeHtml(label)}</button>
+                    `).join('')}
+                </div>
+            ` : ''}
+        `;
+    }
+
+    function setHistoryFilter(filter) {
+        currentHistoryFilter = filter;
+        renderGenerationHistory();
+    }
+
+    function setHistoryTrackFilter(track) {
+        currentHistoryTrackFilter = track;
+        renderGenerationHistory();
+    }
+
+    function formatHistoryTitle(record) {
+        const trackName = record.track_name || '全部赛道';
+        const successCount = Number(record.success_count || 0);
+        const totalTasks = Number(record.total_tasks || 0);
+        return `${trackName} · ${successCount}/${totalTasks}`;
+    }
+
+    function formatFailureStage(stage) {
+        const labels = {
+            api_key: 'API Key',
+            rate_limit: '限流',
+            network: '网络',
+            article_generation: '生文',
+            image_generation: '配图',
+            formatter: '排版',
+            startup: '启动',
+            subprocess: '生成进程',
+        };
+        return labels[stage] || stage || '未知阶段';
+    }
+
+    function formatAihotCategory(category) {
+        const labels = {
+            'ai-products': '产品',
+            tip: '技巧',
+            paper: '论文',
+            industry: '行业',
+            'ai-models': '模型',
+        };
+        return labels[category] || category || '未知分类';
+    }
+
+    async function showHistoryDetail(recordId) {
+        try {
+            const resp = await apiFetch(`/api/articles/history/${encodeURIComponent(recordId)}`);
+            if (!resp.ok) return;
+            const data = await resp.json();
+            const record = data.record || {};
+            document.getElementById('historyDetailTitle').textContent = `生成详情`;
+
+            let bodyHtml = `
+                <div class="setting-row"><div><div class="setting-label">赛道</div></div><div>${escapeHtml(record.track_name || '')}</div></div>
+                <div class="setting-row"><div><div class="setting-label">状态</div></div><div>${escapeHtml(record.status || '')}</div></div>
+                <div class="setting-row"><div><div class="setting-label">耗时</div></div><div>${escapeHtml(record.started_at || '')} ~ ${escapeHtml(record.finished_at || '')}</div></div>
+                <div class="setting-row"><div><div class="setting-label">任务结果</div></div><div>${record.success_count || 0}/${record.total_tasks || 0}</div></div>
+                <div class="setting-row"><div><div class="setting-label">进度</div></div><div>${escapeHtml(record.progress || '')}</div></div>
+            `;
+            if (record.failure_summary) {
+                bodyHtml += `
+                <div class="setting-row"><div><div class="setting-label">失败摘要</div></div><div>${escapeHtml(record.failure_summary)}</div></div>`;
+            }
+            if (record.failure_stage) {
+                bodyHtml += `
+                <div class="setting-row"><div><div class="setting-label">失败阶段</div></div><div>${escapeHtml(formatFailureStage(record.failure_stage))}</div></div>`;
+            }
+            if (record.failure_detail && record.failure_detail !== record.failure_summary) {
+                bodyHtml += `
+                <div class="setting-row"><div><div class="setting-label">失败详情</div></div><div>${escapeHtml(record.failure_detail)}</div></div>`;
+            }
+            if (record.log_excerpt) {
+                bodyHtml += `
+                <div style="margin-top:16px;font-weight:600;">日志片段</div>
+                <pre class="history-log">${escapeHtml(record.log_excerpt)}</pre>`;
+            }
+            if (Array.isArray(record.results) && record.results.length) {
+                bodyHtml += `<div style="margin-top:16px;font-weight:600;">生成结果</div>`;
+                for (const item of record.results) {
+                    const articleId = getHistoryArticleId(item);
+                    const outputDir = item.output_dir || '';
+                    const isFailedResult = item.status === 'failed';
+                    const hotTopic = item.hot_topic || {};
+                    const hotScore = Number(hotTopic.hot_score || 0);
+                    const hotSource = hotTopic.source || '';
+                    const hotCategory = hotTopic.category || '';
+                    bodyHtml += `
+                    <div class="article-card ${isFailedResult ? 'failed' : ''}" style="margin-top:8px;">
+                        <div class="article-info">
+                            <div class="article-title">${isFailedResult ? '失败 ' : ''}${escapeHtml(item.track || '')} ${escapeHtml(item.title || '')}</div>
+                            <div class="article-summary">${escapeHtml(item.summary || '')}</div>
+                            ${(hotScore || hotSource || hotCategory) ? `<div class="article-meta">
+                                ${hotScore ? `<span>热度分 ${hotScore}</span>` : ''}
+                                ${hotSource ? `<span>${escapeHtml(hotSource)}</span>` : ''}
+                                ${hotCategory ? `<span>${escapeHtml(formatAihotCategory(hotCategory))}</span>` : ''}
+                            </div>` : ''}
+                            ${item.failed_reason ? `<div class="article-error-reason">${escapeHtml(formatFailureStage(item.failed_stage || ''))}: ${escapeHtml(item.failed_reason)}</div>` : ''}
+                            ${item.failed_stage ? `<div class="article-meta"><span>阶段：${escapeHtml(formatFailureStage(item.failed_stage))}</span></div>` : ''}
+                        </div>
+                        <div class="article-actions">
+                            ${articleId && !isFailedResult ? `<button class="btn btn-sm btn-outline" onclick="openResultPath(${jsArg(articleId)})">预览</button>` : ''}
+                            ${articleId && isFailedResult ? `<button class="btn btn-sm btn-primary" onclick="retryGenerate(${jsArg(item.track || '')})">重试</button>` : ''}
+                            ${outputDir ? `<button class="btn btn-sm btn-ghost" onclick="showToast('已生成到: ' + ${jsArg(outputDir)}, 'info')">目录</button>` : ''}
+                        </div>
+                    </div>`;
+                }
+            }
+            document.getElementById('historyDetailBody').innerHTML = bodyHtml;
+            document.getElementById('historyDetailFooter').innerHTML = `
+                ${record.log_excerpt ? `<button class="btn btn-outline" onclick="copyHistoryLog(${jsArg(record.log_excerpt)}, this)">复制日志</button>` : ''}
+                ${record.track_name ? `<button class="btn btn-primary" onclick="goToArticlesByTrack(${jsArg(record.track_name)})">看文章</button>` : ''}
+            `;
+            document.getElementById('historyDetailModal').style.display = 'flex';
+        } catch (e) {
+            showToast('加载详情失败: ' + e.message, 'error');
+        }
+    }
+
+    function closeHistoryDetail(event) {
+        if (!event || event.target === document.getElementById('historyDetailModal')) {
+            document.getElementById('historyDetailModal').style.display = 'none';
+        }
+    }
+
+    function getHistoryArticleId(item) {
+        if (!item) return '';
+        if (item.article_id) return item.article_id;
+        return '';
+    }
+
+    async function openResultPath(path) {
+        if (!path) return;
+        await previewArticle(path);
+    }
+
+    async function copyHistoryLog(logText, btnEl) {
+        const origText = btnEl ? btnEl.textContent : '';
+        if (btnEl) { btnEl.disabled = true; btnEl.textContent = '复制中...'; }
+        try {
+            await copyToClipboard(logText || '');
+            showToast('日志已复制', 'success');
+        } catch (e) {
+            showToast('复制失败: ' + e.message, 'error');
+        } finally {
+            if (btnEl) { btnEl.disabled = false; btnEl.textContent = origText || '复制日志'; }
+        }
+    }
+
+    function goToArticlesByTrack(trackName) {
+        closeHistoryDetail();
+        showPage('dashboard');
+        currentFilter = trackName || 'all';
+        renderFilterBar();
+        renderArticles();
     }
 
     function setFilter(filter) {
@@ -454,27 +959,37 @@
             const trackClass = `track-${article.track}`;
             const isGenerating = article.status === 'generating';
             const isFailed = article.status === 'failed';
+            const safeTrack = escapeHtml(article.track);
+            const safeTrackClass = escapeAttr(trackClass);
+            const safeTitle = escapeHtml(article.title || '未命名');
+            const safeSummary = escapeHtml(article.summary || '暂无简介');
+            const safeTopicReason = escapeHtml(article.topic_reason || '');
+            const safeTopicSource = escapeAttr(article.topic_source || '');
+            const safeGeneratedAt = escapeHtml(formatTime(article.generated_at));
+            const safeFailedReason = escapeHtml(article.failed_reason || '');
+            const safeFailedStage = escapeHtml(article.failed_stage || '');
 
             html += `
             <div class="article-card ${isGenerating ? 'generating' : ''} ${isFailed ? 'failed' : ''}">
-                <span class="article-track-badge ${trackClass}">${article.track}</span>
+                <span class="article-track-badge ${safeTrackClass}">${safeTrack}</span>
                 <div class="article-info">
-                    <div class="article-title">${isGenerating ? '<span class="generating-dot">⏳</span> ' : ''}${isFailed ? '❌ ' : ''}${article.title || '未命名'}</div>
-                    <div class="article-summary">${article.summary || '暂无简介'}</div>
-                    ${!isGenerating && !isFailed && article.topic_reason ? `<div class="article-topic-reason" title="${article.topic_source || ''}">💡 ${article.topic_reason}</div>` : ''}
+                    <div class="article-title">${isGenerating ? '<span class="generating-dot">⏳</span> ' : ''}${isFailed ? '❌ ' : ''}${safeTitle}</div>
+                    <div class="article-summary">${safeSummary}</div>
+                    ${!isGenerating && !isFailed && article.topic_reason ? `<div class="article-topic-reason" title="${safeTopicSource}">💡 ${safeTopicReason}</div>` : ''}
+                    ${isFailed && article.failed_reason ? `<div class="article-error-reason" title="${safeFailedReason}">${safeFailedStage ? '[' + formatFailureStage(article.failed_stage || '') + '] ' : ''}${safeFailedReason}</div>` : ''}
                     <div class="article-meta">
                         ${!isGenerating && !isFailed ? `<span>${article.word_count || 0} 字</span>` : ''}
-                        <span>${formatTime(article.generated_at)}</span>
+                        <span>${safeGeneratedAt}</span>
                         ${isGenerating ? '<span style="color:#f59e0b;font-weight:600;">生成中...</span>' : ''}
                         ${isFailed ? '<span style="color:#ef4444;font-weight:600;">生成失败</span>' : ''}
                     </div>
                 </div>
                 <div class="article-actions">
-                    ${!isGenerating && !isFailed && article.has_html ? `<button class="btn btn-sm btn-primary" onclick="copyHtml('${article.id}', this)">复制</button>` : ''}
-                    ${!isGenerating && !isFailed ? `<button class="btn btn-sm btn-outline" onclick="copySummary('${article.id}', this)" title="复制简介">简介</button>` : ''}
-                    ${!isGenerating && !isFailed ? `<button class="btn btn-sm btn-outline" onclick="previewArticle('${article.id}')">预览</button>` : ''}
-                    ${isFailed ? `<button class="btn btn-sm btn-primary" onclick="retryGenerate('${article.track}')">重试</button>` : ''}
-                    <button class="btn btn-sm btn-ghost" onclick="deleteArticle('${article.id}')" title="删除">X</button>
+                    ${!isGenerating && !isFailed && article.has_html ? `<button class="btn btn-sm btn-primary" onclick="copyHtml(${jsArg(article.id)}, this)">复制</button>` : ''}
+                    ${!isGenerating && !isFailed ? `<button class="btn btn-sm btn-outline" onclick="copySummary(${jsArg(article.id)}, this)" title="复制简介">简介</button>` : ''}
+                    ${!isGenerating && !isFailed ? `<button class="btn btn-sm btn-outline" onclick="previewArticle(${jsArg(article.id)})">预览</button>` : ''}
+                    ${isFailed ? `<button class="btn btn-sm btn-primary" onclick="retryGenerate(${jsArg(article.track)})">重试</button>` : ''}
+                    <button class="btn btn-sm btn-ghost" onclick="deleteArticle(${jsArg(article.id)})" title="删除">X</button>
                 </div>
             </div>`;
         }
@@ -484,13 +999,14 @@
     // ============ 生成菜单 ============
     async function loadGenMenu() {
         try {
-            const resp = await fetch('/api/settings');
+            const resp = await apiFetch('/api/settings');
+            if (!resp.ok) return;
             const data = await resp.json();
             let html = `<div class="dropdown-item" onclick="triggerGenerate('')">所有已启用赛道</div>`;
             for (const track of data.tracks) {
                 if (track.enabled) {
-                    html += `<div class="dropdown-item" onclick="triggerGenerate('${track.name}')">
-                        <span class="article-track-badge track-${track.name}" style="font-size:11px;padding:2px 8px;">${track.name}</span>
+                    html += `<div class="dropdown-item" onclick="triggerGenerate(${jsArg(track.name)})">
+                        <span class="article-track-badge ${escapeAttr('track-' + track.name)}" style="font-size:11px;padding:2px 8px;">${escapeHtml(track.name)}</span>
                     </div>`;
                 }
             }
@@ -517,7 +1033,8 @@
         const origText = btnEl ? btnEl.textContent : '';
         if (btnEl) { btnEl.disabled = true; btnEl.textContent = '复制中...'; }
         try {
-            const resp = await fetch(`/api/articles/${articleId}`);
+            const resp = await apiFetch(`/api/articles/${articleId}`);
+            if (!resp.ok) return;
             const data = await resp.json();
             const htmlContent = data.html_content || '';
             if (!htmlContent) { showToast('暂无HTML内容', 'info'); return; }
@@ -555,7 +1072,8 @@
         const origText = btnEl ? btnEl.textContent : '';
         if (btnEl) { btnEl.disabled = true; btnEl.textContent = '复制中...'; }
         try {
-            const resp = await fetch(`/api/articles/${articleId}`);
+            const resp = await apiFetch(`/api/articles/${articleId}`);
+            if (!resp.ok) return;
             const data = await resp.json();
             const summary = data.meta?.summary || '';
             if (!summary) { showToast('暂无简介', 'info'); return; }
@@ -571,7 +1089,8 @@
     // ============ 预览 ============
     async function previewArticle(articleId) {
         try {
-            const resp = await fetch(`/api/articles/${articleId}`);
+            const resp = await apiFetch(`/api/articles/${articleId}`);
+            if (!resp.ok) return;
             const data = await resp.json();
             document.getElementById('previewTitle').textContent = data.meta?.title || '文章预览';
 
@@ -579,9 +1098,9 @@
             if (data.meta?.summary) {
                 bodyHtml += `
                 <div style="background: #f0f4ff; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; cursor: pointer;"
-                     onclick="copySummary('${articleId}')" title="点击复制简介">
+                     onclick="copySummary(${jsArg(articleId)})" title="点击复制简介">
                     <div style="font-size: 12px; color: #6366f1; margin-bottom: 4px;">点击复制简介</div>
-                    <div style="font-size: 14px; color: #334155;">${data.meta.summary}</div>
+                    <div style="font-size: 14px; color: #334155;">${escapeHtml(data.meta.summary)}</div>
                 </div>`;
             }
             if (data.html_content) {
@@ -602,8 +1121,8 @@
             }
             document.getElementById('previewBody').innerHTML = bodyHtml;
             document.getElementById('previewFooter').innerHTML = `
-                <button class="btn btn-primary" onclick="copyHtml('${articleId}', this)">复制排版</button>
-                <button class="btn btn-success" onclick="copySummary('${articleId}', this)">复制简介</button>
+                <button class="btn btn-primary" onclick="copyHtml(${jsArg(articleId)}, this)">复制排版</button>
+                <button class="btn btn-success" onclick="copySummary(${jsArg(articleId)}, this)">复制简介</button>
             `;
             document.getElementById('previewModal').style.display = 'flex';
         } catch (e) {
@@ -619,11 +1138,49 @@
 
     // ============ 删除 ============
     async function deleteArticle(articleId) {
-        if (!confirm('确定要删除这篇文章吗？')) return;
+        if (!confirm('确定要把这篇文章移到回收站吗？')) return;
         try {
-            const resp = await fetch(`/api/articles/${articleId}`, { method: 'DELETE' });
-            if (resp.ok) { showToast('已删除', 'success'); loadArticles(); }
+            const resp = await apiFetch(`/api/articles/${articleId}`, { method: 'DELETE' });
+            const data = await resp.json();
+            if (resp.ok) { showToast(data.message || '已移到回收站', 'success'); loadArticles(); }
+            else { showToast(data.detail || '删除失败', 'error'); }
         } catch (e) { showToast('删除失败', 'error'); }
+    }
+
+    async function restoreArticle(articleId) {
+        try {
+            const [date, ...rest] = articleId.split('/');
+            const trackDir = rest.join('/');
+            const resp = await apiFetch(`/api/articles/trash/${date}/${encodeURIComponent(trackDir)}/restore`, { method: 'POST' });
+            const data = await resp.json();
+            if (resp.ok) {
+                showToast(data.message || '已恢复', 'success');
+                loadTrashArticles();
+                loadArticles();
+            } else {
+                showToast(data.detail || '恢复失败', 'error');
+            }
+        } catch (e) {
+            showToast('恢复失败: ' + e.message, 'error');
+        }
+    }
+
+    async function purgeTrashArticle(articleId) {
+        if (!confirm('确定要彻底删除这篇文章吗？这个操作无法恢复。')) return;
+        try {
+            const [date, ...rest] = articleId.split('/');
+            const trackDir = rest.join('/');
+            const resp = await apiFetch(`/api/articles/trash/${date}/${encodeURIComponent(trackDir)}`, { method: 'DELETE' });
+            const data = await resp.json();
+            if (resp.ok) {
+                showToast(data.message || '已彻底删除', 'success');
+                loadTrashArticles();
+            } else {
+                showToast(data.detail || '删除失败', 'error');
+            }
+        } catch (e) {
+            showToast('删除失败: ' + e.message, 'error');
+        }
     }
 
     // ============ 重试生成 ============
@@ -640,9 +1197,12 @@
 
         try {
             const url = `/api/generate?track_name=${encodeURIComponent(trackName)}`;
-            const resp = await fetch(url, { method: 'POST' });
+            const resp = await apiFetch(url, { method: 'POST' });
             const data = await resp.json();
-            if (data.status === 'already_running') {
+            if (data.status === 'error') {
+                showToast(data.message || '启动失败', 'error');
+                btn.disabled = false; btn.textContent = '生成';
+            } else if (data.status === 'already_running') {
                 showToast('已有生成任务在运行中', 'info');
                 btn.disabled = false; btn.textContent = '生成';
             } else {
@@ -665,7 +1225,8 @@
         const btn = document.getElementById('generateBtn');
         const poll = async () => {
             try {
-                const resp = await fetch('/api/generate/status');
+                const resp = await apiFetch('/api/generate/status');
+                if (!resp.ok) return;
                 const status = await resp.json();
                 if (status.running) {
                     btn.textContent = (status.progress || '生成中...').substring(0, 8);
@@ -674,7 +1235,9 @@
                 } else {
                     btn.disabled = false;
                     btn.textContent = '生成';
-                    if (status.progress.includes('完成')) {
+                    if (status.progress.includes('部分成功')) {
+                        showToast(status.progress, 'info');
+                    } else if (status.progress.includes('完成')) {
                         showToast('文章生成完成！', 'success');
                     } else if (status.progress.includes('错误') || status.progress.includes('失败')) {
                         showToast('生成失败: ' + status.progress, 'error');
@@ -691,7 +1254,8 @@
     // ============ 设置页面 ============
     async function loadSettings() {
         try {
-            const resp = await fetch('/api/settings');
+            const resp = await apiFetch('/api/settings');
+            if (!resp.ok) return;
             currentSettings = await resp.json();
             renderSettings(currentSettings);
         } catch (e) { showToast('加载设置失败', 'error'); }
@@ -700,22 +1264,24 @@
     function renderSettings(settings) {
         let trackHtml = '';
         for (const track of settings.tracks) {
+            const safeName = escapeHtml(track.name);
+            const safeKeywords = escapeHtml(track.keywords.join('、'));
             trackHtml += `
             <div class="setting-row">
                 <div>
-                    <div class="setting-label">${track.name}</div>
-                    <div class="setting-desc">关键词：${track.keywords.join('、')}</div>
+                    <div class="setting-label">${safeName}</div>
+                    <div class="setting-desc">关键词：${safeKeywords}</div>
                 </div>
                 <div style="display: flex; align-items: center; gap: 16px;">
                     <div class="number-input">
                         <span style="font-size: 12px; color: var(--text-secondary);">每日篇数</span>
-                        <button type="button" onclick="changeArticlesPerDay('${track.name}', -1)">-</button>
-                        <input type="text" id="articles_${track.name}" value="${track.articles_per_day}" readonly style="width: 32px; text-align: center; border: 1px solid var(--border); border-radius: 6px; padding: 4px; font-size: 14px; background: var(--card);">
-                        <button type="button" onclick="changeArticlesPerDay('${track.name}', 1)">+</button>
+                        <button type="button" onclick="changeArticlesPerDay(${jsArg(track.name)}, -1)">-</button>
+                        <input type="text" id="articles_${escapeAttr(track.name)}" value="${Number(track.articles_per_day) || 1}" readonly style="width: 32px; text-align: center; border: 1px solid var(--border); border-radius: 6px; padding: 4px; font-size: 14px; background: var(--card);">
+                        <button type="button" onclick="changeArticlesPerDay(${jsArg(track.name)}, 1)">+</button>
                     </div>
                     <label class="toggle">
-                        <input type="checkbox" id="enabled_${track.name}" ${track.enabled ? 'checked' : ''}
-                               onchange="toggleTrack('${track.name}', this.checked)">
+                        <input type="checkbox" id="enabled_${escapeAttr(track.name)}" ${track.enabled ? 'checked' : ''}
+                               onchange="toggleTrack(${jsArg(track.name)}, this.checked)">
                         <span class="toggle-slider"></span>
                     </label>
                 </div>
@@ -734,16 +1300,36 @@
             </div>`;
 
         const gen = settings.generation || {};
+        const options = settings.options || {};
+        const textModels = options.text_models || [];
+        const imageModels = options.image_models || [];
         document.getElementById('generationSettings').innerHTML = `
             <div class="setting-row">
                 <div>
+                    <div class="setting-label">生文模型</div>
+                    <div class="setting-desc">从硅基流动可用模型里选择当前账号的写作模型</div>
+                </div>
+                <select id="textModel" style="padding: 6px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px;">
+                    ${textModels.map(model => `<option value="${escapeAttr(model)}" ${gen.model === model ? 'selected' : ''}>${escapeHtml(model)}</option>`).join('')}
+                </select>
+            </div>
+            <div class="setting-row">
+                <div>
                     <div class="setting-label">图片来源</div>
-                    <div class="setting-desc">stock=图库搜索 / ai=AI生图 / auto=自动选择</div>
+                    <div class="setting-desc">二选一：硅基流动生图 或 Pexels 搜图</div>
                 </div>
                 <select id="imageSource" style="padding: 6px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px;">
-                    <option value="stock" ${gen.image_source === 'stock' ? 'selected' : ''}>图库搜索</option>
-                    <option value="ai" ${gen.image_source === 'ai' ? 'selected' : ''}>AI生图</option>
-                    <option value="auto" ${gen.image_source === 'auto' ? 'selected' : ''}>自动选择</option>
+                    <option value="ai" ${gen.image_source === 'ai' ? 'selected' : ''}>硅基流动生图</option>
+                    <option value="pexels" ${gen.image_source === 'pexels' ? 'selected' : ''}>Pexels 搜图</option>
+                </select>
+            </div>
+            <div class="setting-row">
+                <div>
+                    <div class="setting-label">图片模型</div>
+                    <div class="setting-desc">仅在“硅基流动生图”时生效</div>
+                </div>
+                <select id="imageModel" style="padding: 6px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px;">
+                    ${imageModels.map(model => `<option value="${escapeAttr(model)}" ${gen.image_model === model ? 'selected' : ''}>${escapeHtml(model)}</option>`).join('')}
                 </select>
             </div>
             <div class="setting-row">
@@ -757,6 +1343,31 @@
                     <span>~</span>
                     <input type="number" id="wordMax" value="${gen.word_count_max || 1300}" min="500" max="8000"
                            style="width: 70px; padding: 4px; border: 1px solid var(--border); border-radius: 6px; text-align: center;">
+                </div>
+            </div>`;
+
+        const account = settings.account || {};
+        document.getElementById('apiKeySettings').innerHTML = `
+            <div class="setting-row">
+                <div>
+                    <div class="setting-label">硅基流动 API Key</div>
+                    <div class="setting-desc">${account.has_api_key ? '已保存，后端加密存储，不会明文展示' : '未保存，生文前需要填写'}</div>
+                </div>
+                <div class="api-key-row">
+                    <input type="password" id="userApiKey" placeholder="${account.has_api_key ? '输入新 Key 可覆盖' : '请输入你的硅基流动 API Key'}" autocomplete="off">
+                    <button class="btn btn-outline" onclick="saveApiKey()">保存 Key</button>
+                </div>
+            </div>`;
+
+        document.getElementById('pexelsApiKeySettings').innerHTML = `
+            <div class="setting-row">
+                <div>
+                    <div class="setting-label">Pexels API Key</div>
+                    <div class="setting-desc">${account.has_pexels_api_key ? '已保存，仅在图片来源选择 Pexels 时使用' : '未保存，只有在图片来源选择 Pexels 时才需要'}</div>
+                </div>
+                <div class="api-key-row">
+                    <input type="password" id="pexelsApiKey" placeholder="${account.has_pexels_api_key ? '输入新 Key 可覆盖' : '请输入你的 Pexels API Key'}" autocomplete="off">
+                    <button class="btn btn-outline" onclick="savePexelsApiKey()">保存 Key</button>
                 </div>
             </div>`;
     }
@@ -789,20 +1400,83 @@
             })),
             schedule: { time: document.getElementById('scheduleTime').value },
             generation: {
+                model: document.getElementById('textModel').value,
                 image_source: document.getElementById('imageSource').value,
+                image_model: document.getElementById('imageModel').value,
                 word_count_min: parseInt(document.getElementById('wordMin').value),
                 word_count_max: parseInt(document.getElementById('wordMax').value),
             },
         };
         try {
-            const resp = await fetch('/api/settings', {
+            const resp = await apiFetch('/api/settings', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(settingsToUpdate),
             });
             const data = await resp.json();
-            showToast(data.status === 'ok' ? '设置已保存' : '保存失败', data.status === 'ok' ? 'success' : 'error');
+            if (resp.ok && data.status === 'ok') {
+                const source = settingsToUpdate.generation.image_source;
+                if (source === 'pexels') {
+                    showToast('设置已保存；如果还没填 Pexels API Key，生成前记得先保存', 'success');
+                } else {
+                    showToast('设置已保存', 'success');
+                }
+            } else {
+                showToast(data.detail || data.message || '保存失败', 'error');
+            }
         } catch (e) { showToast('保存失败: ' + e.message, 'error'); }
+    }
+
+    async function saveApiKey() {
+        const input = document.getElementById('userApiKey');
+        const apiKey = input.value.trim();
+        if (!apiKey) {
+            showToast('请输入硅基流动 API Key', 'error');
+            return;
+        }
+        try {
+            const resp = await apiFetch('/api/account/api-key', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ api_key: apiKey }),
+            });
+            const data = await resp.json();
+            if (!resp.ok) {
+                showToast(data.detail || '保存失败', 'error');
+                return;
+            }
+            input.value = '';
+            showToast('硅基流动 API Key 已保存', 'success');
+            await loadSettings();
+        } catch (e) {
+            showToast('保存失败: ' + e.message, 'error');
+        }
+    }
+
+    async function savePexelsApiKey() {
+        const input = document.getElementById('pexelsApiKey');
+        const apiKey = input.value.trim();
+        if (!apiKey) {
+            showToast('请输入 Pexels API Key', 'error');
+            return;
+        }
+        try {
+            const resp = await apiFetch('/api/account/pexels-api-key', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ api_key: apiKey }),
+            });
+            const data = await resp.json();
+            if (!resp.ok) {
+                showToast(data.detail || '保存失败', 'error');
+                return;
+            }
+            input.value = '';
+            showToast('Pexels API Key 已保存', 'success');
+            await loadSettings();
+        } catch (e) {
+            showToast('保存失败: ' + e.message, 'error');
+        }
     }
 
     // ============ Toast ============
@@ -810,7 +1484,9 @@
         const container = document.getElementById('toastContainer');
         const toast = document.createElement('div');
         toast.className = `toast ${type}`;
-        toast.innerHTML = `<span>${message}</span>`;
+        const span = document.createElement('span');
+        span.textContent = message;
+        toast.appendChild(span);
         container.appendChild(toast);
         setTimeout(() => {
             toast.style.opacity = '0'; toast.style.transform = 'translateX(100%)';
@@ -821,8 +1497,7 @@
 
     // ============ 初始化 ============
     document.addEventListener('DOMContentLoaded', () => {
-        loadArticles();
-        loadSettings(); // 预加载设置用于筛选栏
+        bootstrapAuth();
     });
 </script>
 </body>

@@ -12,6 +12,7 @@ venv/
 
 # 输出文件（服务器重新生成）
 output/
+data/
 
 # IDE
 .vscode/

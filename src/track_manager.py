@@ -9,6 +9,7 @@ from __future__ import annotations
   ├── AI赛道/
   └── 高校赛道/
 """
+import os
 import yaml
 from pathlib import Path
 from typing import Optional
@@ -18,7 +19,7 @@ from article_parser import parse_article
 
 # 项目根目录
 PROJECT_ROOT = Path(__file__).parent.parent
-CONFIG_PATH = PROJECT_ROOT / "config.yaml"
+CONFIG_PATH = Path(os.getenv("WX_CONFIG_PATH", str(PROJECT_ROOT / "config.yaml")))
 TRACKS_DIR = PROJECT_ROOT / "tracks"
 
 

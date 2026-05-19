@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import tempfile
 from pathlib import Path
 
 from config import OUTPUT_DIR, PROJECT_ROOT
@@ -27,16 +28,44 @@ def _get_env():
     return repo, token, branch
 
 
-def _run_git(cmd: list[str], cwd: str = None) -> tuple[bool, str]:
+def _clean_repo_url(repo: str) -> str:
+    """Remove embedded credentials before saving a remote URL."""
+    if "@" in repo and repo.startswith("https://"):
+        return "https://" + repo.split("@", 1)[1]
+    return repo
+
+
+def _run_git(cmd: list[str], cwd: str = None, token: str = "") -> tuple[bool, str]:
     """执行 git 命令"""
+    askpass_path = None
     try:
+        env = os.environ.copy()
+        if token:
+            fd, askpass_path = tempfile.mkstemp(prefix="wxarticle_git_", suffix=".bat")
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write("@echo off\n")
+                f.write('echo %~1 | findstr /I "Username" >nul\n')
+                f.write("if not errorlevel 1 (\n")
+                f.write("  echo x-access-token\n")
+                f.write(") else (\n")
+                f.write("  echo %DATA_GIT_TOKEN%\n")
+                f.write(")\n")
+            env["GIT_ASKPASS"] = askpass_path
+            env["GIT_TERMINAL_PROMPT"] = "0"
+            env["DATA_GIT_TOKEN"] = token
         result = subprocess.run(
             cmd, capture_output=True, text=True,
-            cwd=cwd or str(OUTPUT_DIR), timeout=30
+            cwd=cwd or str(OUTPUT_DIR), timeout=30, env=env
         )
         return result.returncode == 0, result.stdout + result.stderr
     except Exception as e:
         return False, str(e)
+    finally:
+        if askpass_path:
+            try:
+                os.unlink(askpass_path)
+            except OSError:
+                pass
 
 
 def pull_data():
@@ -46,11 +75,7 @@ def pull_data():
         print("[DATA] 未配置 DATA_GIT_REPO/DATA_GIT_TOKEN，跳过数据拉取")
         return
 
-    # 构建 token 认证的 URL
-    if "github.com" in repo:
-        auth_repo = repo.replace("https://github.com", f"https://{token}@github.com")
-    else:
-        auth_repo = repo
+    clean_repo = _clean_repo_url(repo)
 
     # 初始化 git 仓库（如果还没有）
     if not (OUTPUT_DIR / ".git").exists():
@@ -60,11 +85,13 @@ def pull_data():
         if not ok:
             print(f"[DATA] git init 失败: {msg}")
             return
-        _run_git(["git", "remote", "add", "origin", auth_repo])
+        _run_git(["git", "remote", "add", "origin", clean_repo])
+    else:
+        _run_git(["git", "remote", "set-url", "origin", clean_repo])
 
     # 拉取数据分支
     print(f"[DATA] 从 {branch} 分支拉取最新数据...")
-    _run_git(["git", "fetch", "origin", branch])
+    _run_git(["git", "fetch", "origin", branch], token=token)
 
     # 尝试切换到数据分支
     ok, msg = _run_git(["git", "checkout", branch])
@@ -75,7 +102,7 @@ def pull_data():
             print(f"[DATA] 创建分支失败: {msg2}")
             return
 
-    ok, msg = _run_git(["git", "pull", "origin", branch])
+    ok, msg = _run_git(["git", "pull", "origin", branch], token=token)
     if ok:
         print("[DATA] ✅ 数据拉取成功")
     else:
@@ -89,14 +116,10 @@ def push_data():
         print("[DATA] 未配置持久化，跳过数据推送")
         return
 
-    # 构建 token 认证的 URL
-    if "github.com" in repo:
-        auth_repo = repo.replace("https://github.com", f"https://{token}@github.com")
-    else:
-        auth_repo = repo
+    clean_repo = _clean_repo_url(repo)
 
-    # 确保远程地址包含 token
-    _run_git(["git", "remote", "set-url", "origin", auth_repo])
+    # 确保远程地址不包含 token，凭证只通过临时 askpass 传递
+    _run_git(["git", "remote", "set-url", "origin", clean_repo])
 
     # 添加所有文件
     _run_git(["git", "add", "."])
@@ -115,7 +138,7 @@ def push_data():
     _run_git(["git", "commit", "-m", commit_msg])
 
     # 推送
-    ok, msg = _run_git(["git", "push", "origin", branch, "--force"])
+    ok, msg = _run_git(["git", "push", "origin", branch], token=token)
     if ok:
         print("[DATA] ✅ 数据推送成功")
     else:

@@ -14,33 +14,43 @@ load_dotenv(ENV_PATH)
 # 项目路径
 PROJECT_ROOT = Path(__file__).parent.parent
 INPUT_DIR = PROJECT_ROOT / "input_articles"
-OUTPUT_DIR = PROJECT_ROOT / "output"
+OUTPUT_DIR = Path(os.getenv("WX_OUTPUT_DIR", str(PROJECT_ROOT / "output")))
 TEMPLATE_DIR = PROJECT_ROOT / "templates"
 TRACKS_DIR = PROJECT_ROOT / "tracks"
 
 # 硅基流动 API
-SILICONFLOW_API_KEY = os.getenv("SILICONFLOW_API_KEY", "")
+SILICONFLOW_API_KEY = os.getenv("WX_AI_API_KEY") or os.getenv("SILICONFLOW_API_KEY", "")
 SILICONFLOW_BASE_URL = "https://api.siliconflow.cn/v1"
-MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen3-235B-A22B-Instruct-2507")
+MODEL_NAME = os.getenv("WX_MODEL_NAME") or os.getenv("MODEL_NAME", "Qwen/Qwen3-235B-A22B-Instruct-2507")
+IMAGE_MODEL_NAME = os.getenv("WX_IMAGE_MODEL_NAME", "Kwai-Kolors/Kolors")
 
 # 图库 API（免费可商用）
-PEXELS_API_KEY = os.getenv("PEXELS_API_KEY", "")
+PEXELS_API_KEY = os.getenv("WX_PEXELS_API_KEY") or os.getenv("PEXELS_API_KEY", "")
 PIXABAY_API_KEY = os.getenv("PIXABAY_API_KEY", "")
 
 # SM.MS 图床
 SMMS_TOKEN = os.getenv("SMMS_TOKEN", "")
 
+# Web 管理接口保护。公开部署时必须配置，未配置时只允许本机调用高危接口。
+ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")
+
 # 图片来源模式：优先读环境变量，其次读config.yaml，默认stock
 _yaml_gen_config = {}
 try:
     import yaml as _yaml
-    _cfg_path = Path(__file__).parent.parent / "config.yaml"
+    _cfg_path = Path(os.getenv("WX_CONFIG_PATH", str(Path(__file__).parent.parent / "config.yaml")))
     if _cfg_path.exists():
         with open(_cfg_path, "r", encoding="utf-8") as _f:
             _yaml_gen_config = _yaml.safe_load(_f).get("generation", {})
 except Exception:
     pass
-IMAGE_SOURCE = os.getenv("IMAGE_SOURCE", _yaml_gen_config.get("image_source", "stock"))
+_raw_image_source = str(os.getenv("IMAGE_SOURCE", _yaml_gen_config.get("image_source", "stock"))).lower()
+if _raw_image_source == "auto":
+    IMAGE_SOURCE = "ai" if SILICONFLOW_API_KEY else "stock"
+elif _raw_image_source in ("ai", "stock"):
+    IMAGE_SOURCE = _raw_image_source
+else:
+    IMAGE_SOURCE = "stock"
 
 # 封面图配置
 COVER_WIDTH = 900

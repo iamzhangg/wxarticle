@@ -51,7 +51,13 @@ from track_manager import (
     get_enabled_tracks, load_track_prompt,
     get_track_keywords, get_track_search_sources, get_generation_config,
 )
-from topic_searcher import search_hot_topics, select_best_topic
+from topic_searcher import (
+    build_fallback_topics,
+    load_generated_topic_keys,
+    search_aihot_topics,
+    search_hot_topics,
+    select_best_topic,
+)
 from article_generator import generate_article
 from formatter import markdown_to_platform_html, save_article_files, generate_preview_html
 
@@ -136,6 +142,38 @@ def _get_next_output_dir(date_str: str, track_name: str) -> Path:
     return date_dir / f"{track_name}_{seq}"
 
 
+def _write_meta(output_dir: Path, meta: dict) -> None:
+    """Persist article metadata with utf-8 encoding."""
+    meta_path = output_dir / "meta.json"
+    with open(meta_path, "w", encoding="utf-8") as f:
+        json.dump(meta, f, ensure_ascii=False, indent=2)
+
+
+def _mark_track_failure(
+    output_dir: Path | None,
+    track_name: str,
+    message: str,
+    hot_topic: dict | None = None,
+    stage: str = "",
+) -> None:
+    """Write a failed meta snapshot so Web console can surface the reason."""
+    if not output_dir:
+        return
+    output_dir.mkdir(parents=True, exist_ok=True)
+    meta = {
+        "track": track_name,
+        "title": f"生成失败：{track_name}赛道",
+        "summary": message,
+        "word_count": 0,
+        "hot_topic": hot_topic or {},
+        "generated_at": datetime.now().isoformat(),
+        "status": "failed",
+        "failed_reason": message,
+        "failed_stage": stage,
+    }
+    _write_meta(output_dir, meta)
+
+
 def process_track(
     track: dict,
     dry_run: bool = False,
@@ -158,6 +196,13 @@ def process_track(
     print(f"🏁 赛道: {track_name}")
     print(f"{'='*50}")
 
+    date_str = datetime.now().strftime("%Y-%m-%d")
+    if output_dir:
+        track_output_dir = output_dir
+    else:
+        track_output_dir = _get_next_output_dir(date_str, track_name)
+    track_output_dir.mkdir(parents=True, exist_ok=True)
+
     # ========== Step 1: 读取赛道配置 ==========
     print(f"\n[INFO] Step 1: 读取赛道配置...")
     track_prompt = load_track_prompt(track_name)
@@ -171,8 +216,23 @@ def process_track(
     hot_topic = None
 
     if not dry_run and not skip_search:
-        sources = get_track_search_sources(track_name)
-        topics = search_hot_topics(keywords, sources=sources, count=15)
+        if track_name == "AI赛道":
+            generated_keys = load_generated_topic_keys(track_name=track_name)
+            topics = search_aihot_topics(generated_keys=generated_keys, count=15)
+            if topics:
+                print(f"  [OK] AI HOT 24小时内产品/技巧选题 {len(topics)} 个")
+            else:
+                print("  [WARN] AI HOT 未返回可用新选题，切换到旧搜索源")
+        else:
+            topics = []
+
+        if not topics:
+            sources = get_track_search_sources(track_name)
+            topics = search_hot_topics(keywords, sources=sources, count=15)
+        if not topics:
+            topics = build_fallback_topics(track_name, keywords, count=5)
+            if topics:
+                print(f"  [WARN] 搜索源无结果，切换到本地保底选题池 {len(topics)} 个")
 
         if topics:
             print(f"  找到 {len(topics)} 个相关选题")
@@ -214,6 +274,13 @@ def process_track(
         )
         if not article:
             print(f"  ✗ 文章生成失败")
+            _mark_track_failure(
+                track_output_dir,
+                track_name,
+                "文章生成失败，请检查模型响应或重试",
+                hot_topic=hot_topic,
+                stage="article_generation",
+            )
             return None
 
     print(f"  [WRITE] 标题: {article['title']}")
@@ -223,25 +290,21 @@ def process_track(
     # ========== Step 4: 配图 ==========
     print(f"\n[ART] Step 4: 生成封面图和插图...")
 
-    date_str = datetime.now().strftime("%Y-%m-%d")
-    # 支持同赛道同天多篇文章：赛道名_序号
-    if output_dir:
-        track_output_dir = output_dir
-    else:
-        track_output_dir = _get_next_output_dir(date_str, track_name)
-    track_output_dir.mkdir(parents=True, exist_ok=True)
-
     cover_path = None
-    inline_images = []  # 存储在线URL
 
     if not dry_run:
         # 封面图
-        cover_path = generate_cover_image(
-            article["title"],
-            article["content"],
-            track_output_dir,
-            track_name=track_name,
-        )
+        try:
+            cover_path = generate_cover_image(
+                article["title"],
+                article["content"],
+                track_output_dir,
+                track_name=track_name,
+            )
+            if not cover_path:
+                print("  [WARN] 封面图生成失败，继续生成正文")
+        except Exception as e:
+            print(f"  [WARN] 封面图阶段异常，继续生成正文: {e}")
 
         # 插图：用LLM生成搜索词替代随机中文词提取
         search_topics = _extract_image_topics(article["title"], article["content"])
@@ -249,21 +312,29 @@ def process_track(
 
         local_inline_images = []  # 本地路径，后续上传
         for i, topic in enumerate(search_topics[:INLINE_IMAGE_COUNT]):
-            img_path = generate_inline_image(
-                topic, track_output_dir, i + 1, exclude_urls=used_image_urls,
-                article_content=article["content"], track_name=track_name,
-            )
+            try:
+                img_path = generate_inline_image(
+                    topic, track_output_dir, i + 1, exclude_urls=used_image_urls,
+                    article_content=article["content"], track_name=track_name,
+                )
+            except Exception as e:
+                print(f"  [WARN] 插图{i + 1}生成异常，跳过: {e}")
+                img_path = None
             if img_path:
                 local_inline_images.append(str(img_path))
 
         # 补充插图：用LLM生成更多搜索词
         while len(local_inline_images) < INLINE_IMAGE_COUNT:
             fallback_topic = article["title"]  # 直接用标题，LLM会重新生成搜索词
-            img_path = generate_inline_image(
-                fallback_topic, track_output_dir, len(local_inline_images) + 1,
-                exclude_urls=used_image_urls,
-                article_content=article["content"], track_name=track_name,
-            )
+            try:
+                img_path = generate_inline_image(
+                    fallback_topic, track_output_dir, len(local_inline_images) + 1,
+                    exclude_urls=used_image_urls,
+                    article_content=article["content"], track_name=track_name,
+                )
+            except Exception as e:
+                print(f"  [WARN] 补充插图生成异常，停止补图: {e}")
+                img_path = None
             if img_path:
                 local_inline_images.append(str(img_path))
             else:
@@ -273,13 +344,25 @@ def process_track(
         print(f"\n📐 Step 5: 排版为内容平台HTML...")
 
         cover_url = str(cover_path) if cover_path else ""
-        html_content = markdown_to_platform_html(
-            article["raw_markdown"],
-            title=article["title"],
-            cover_image_url=cover_url,
-            inline_images=local_inline_images,
-            output_dir=track_output_dir,
-        )
+        try:
+            html_content = markdown_to_platform_html(
+                article["raw_markdown"],
+                title=article["title"],
+                cover_image_url=cover_url,
+                inline_images=local_inline_images,
+                output_dir=track_output_dir,
+            )
+        except Exception as e:
+            message = f"排版失败: {e}"
+            print(f"  ✗ {message}")
+            _mark_track_failure(
+                track_output_dir,
+                track_name,
+                message,
+                hot_topic=hot_topic,
+                stage="formatter",
+            )
+            return None
 
     else:
         # dry-run模式
@@ -307,8 +390,7 @@ def process_track(
         "cover_image": str(cover_path) if cover_path else None,
         "generated_at": datetime.now().isoformat(),
     }
-    with open(meta_path, "w", encoding="utf-8") as f:
-        json.dump(meta, f, ensure_ascii=False, indent=2)
+    _write_meta(track_output_dir, meta)
 
     print(f"  [OK] 文件已保存到: {track_output_dir}")
 
@@ -316,9 +398,11 @@ def process_track(
         "track": track_name,
         "title": article["title"],
         "summary": article.get("summary", ""),
-        "cover_path": cover_path,
-        "html_path": files.get("content_html"),
-        "output_dir": track_output_dir,
+        "cover_path": str(cover_path) if cover_path else "",
+        "html_path": str(files.get("content_html", "")) if files.get("content_html") else "",
+        "output_dir": str(track_output_dir),
+        "article_id": f"{track_output_dir.parent.name}/{track_output_dir.name}",
+        "hot_topic": hot_topic,
     }
 
 
@@ -327,7 +411,7 @@ def main(
     track_name: str = "",
     skip_search: bool = False,
     pre_assigned_dirs: dict | None = None,
-) -> bool:
+) -> dict:
     """v2主流程"""
     start_time = time.time()
 
@@ -341,14 +425,28 @@ def main(
 
     if not all_tracks:
         print("✗ 没有启用的赛道，请检查 config.yaml")
-        return False
+        return {
+            "status": "failed",
+            "success": False,
+            "total_tasks": 0,
+            "success_count": 0,
+            "failure_count": 0,
+            "results": [],
+        }
 
     # 如果指定了赛道，只跑该赛道
     if track_name:
         all_tracks = [t for t in all_tracks if t["name"] == track_name]
         if not all_tracks:
             print(f"✗ 未找到赛道: {track_name}")
-            return False
+            return {
+                "status": "failed",
+                "success": False,
+                "total_tasks": 0,
+                "success_count": 0,
+                "failure_count": 0,
+                "results": [],
+            }
 
     total_tasks = sum(max(1, int(t.get("articles_per_day", 1) or 1)) for t in all_tracks)
     assigned_dirs = _normalize_pre_assigned_dirs(pre_assigned_dirs)
@@ -373,6 +471,12 @@ def main(
                     results.append(result)
             except Exception as e:
                 print(f"  ✗ 赛道 '{track['name']}' 第 {article_index + 1} 篇处理失败: {e}")
+                _mark_track_failure(
+                    out_dir,
+                    track["name"],
+                    f"未捕获异常: {e}",
+                    stage="process_track",
+                )
                 import traceback
                 traceback.print_exc()
 
@@ -386,7 +490,28 @@ def main(
     print(f"   输出目录: {OUTPUT_DIR / datetime.now().strftime('%Y-%m-%d')}")
     print(f"{'=' * 60}")
 
-    return len(results) > 0
+    success_count = len(results)
+    failure_count = total_tasks - success_count
+    if success_count == total_tasks:
+        status = "all_success"
+        success = True
+    elif success_count > 0:
+        status = "partial_success"
+        success = False
+        print("[WARN] 存在部分失败，请检查失败赛道和输出目录")
+    else:
+        status = "failed"
+        success = False
+        print("[ERROR] 所有任务都失败了")
+
+    return {
+        "status": status,
+        "success": success,
+        "total_tasks": total_tasks,
+        "success_count": success_count,
+        "failure_count": failure_count,
+        "results": results,
+    }
 
 
 if __name__ == "__main__":
@@ -406,10 +531,24 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"[WARN] 解析 WX_PRE_ASSIGNED_DIRS 失败: {e}")
 
-    success = main(
+    result = main(
         dry_run=args.dry_run,
         track_name=args.track,
         skip_search=args.skip_search,
         pre_assigned_dirs=pre_assigned,
     )
-    sys.exit(0 if success else 1)
+    print(
+        "[RESULT] "
+        + json.dumps(
+            {
+                "status": result["status"],
+                "success": result["success"],
+                "total_tasks": result["total_tasks"],
+                "success_count": result["success_count"],
+                "failure_count": result["failure_count"],
+                "results": result.get("results", []),
+            },
+            ensure_ascii=False,
+        )
+    )
+    sys.exit(0 if result["success"] else 1)

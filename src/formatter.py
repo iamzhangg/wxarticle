@@ -12,6 +12,7 @@ v3改进：
 - 去掉质检报告
 """
 import base64
+import html as html_lib
 import re
 from datetime import datetime
 from pathlib import Path
@@ -469,12 +470,16 @@ def generate_preview_html(
         if match:
             inner_html = match.group(1)
 
+    safe_title = _escape_html(title)
+    safe_author = _escape_html(author or "内容账号名称")
+    safe_publish_date = _escape_html(publish_date or "刚刚")
+
     preview = f"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{title} - 内容平台文章预览</title>
+    <title>{safe_title} - 内容平台文章预览</title>
     <style>
         * {{
             margin: 0;
@@ -653,10 +658,10 @@ def generate_preview_html(
             </div>
             <div class="phone-content">
                 <div class="article-meta">
-                    <h1>{title or '文章标题'}</h1>
+                    <h1>{safe_title or '文章标题'}</h1>
                     <div class="meta-info">
-                        <span class="author-name">{author or '内容账号名称'}</span>
-                        <span>{publish_date or '刚刚'}</span>
+                        <span class="author-name">{safe_author}</span>
+                        <span>{safe_publish_date}</span>
                     </div>
                 </div>
                 <div class="rich_media_content" id="article-content">
@@ -815,6 +820,7 @@ def _md_to_html_basic(md: str) -> str:
 
 def _inline_format(text: str) -> str:
     """处理行内格式：粗体、斜体、代码、链接"""
+    text = _escape_html(text)
     text = re.sub(r"!\[(.+?)\]\((.+?)\)", r'<img src="\2" alt="\1">', text)
     text = re.sub(r"\*\*\*(.+?)\*\*\*", r"<strong><em>\1</em></strong>", text)
     text = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", text)
@@ -826,7 +832,7 @@ def _inline_format(text: str) -> str:
 
 def _escape_html(text: str) -> str:
     """转义HTML特殊字符"""
-    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    return html_lib.escape(str(text), quote=True)
 
 
 def _apply_drop_cap(html: str) -> str:

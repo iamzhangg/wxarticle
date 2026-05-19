@@ -18,7 +18,7 @@ except ImportError:
     sys.exit(1)
 
 from config import (
-    SILICONFLOW_API_KEY, SILICONFLOW_BASE_URL,
+    IMAGE_MODEL_NAME, SILICONFLOW_API_KEY, SILICONFLOW_BASE_URL,
     COVER_WIDTH, COVER_HEIGHT, OUTPUT_DIR,
 )
 
@@ -51,7 +51,7 @@ def generate_cover_image(
                 "Content-Type": "application/json",
             },
             json={
-                "model": "Kwai-Kolors/Kolors",
+                "model": IMAGE_MODEL_NAME,
                 "prompt": prompt,
                 "negative_prompt": "text, words, letters, Chinese characters, watermark, logo, signature, blurry, low quality, distorted",
                 "image_size": "1024x1024",
@@ -113,7 +113,7 @@ def _generate_cover_fallback(prompt: str, output_dir: Path) -> Optional[Path]:
                 "Content-Type": "application/json",
             },
             json={
-                "model": "Kwai-Kolors/Kolors",
+                "model": IMAGE_MODEL_NAME,
                 "prompt": prompt,
                 "negative_prompt": "text, words, letters, Chinese characters, watermark, logo, signature",
                 "image_size": "960x1280",
@@ -406,7 +406,7 @@ def generate_inline_image(
                 "Content-Type": "application/json",
             },
             json={
-                "model": "Kwai-Kolors/Kolors",
+                "model": IMAGE_MODEL_NAME,
                 "prompt": prompt,
                 "negative_prompt": "text, words, letters, Chinese characters, watermark, logo, signature, blurry, low quality, distorted",
                 "image_size": "1024x576",

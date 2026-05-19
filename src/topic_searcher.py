@@ -11,7 +11,7 @@ import json
 import random
 import re
 import time
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from urllib.parse import quote
 
@@ -19,6 +19,69 @@ import requests
 from bs4 import BeautifulSoup
 
 from config import SILICONFLOW_API_KEY, SILICONFLOW_BASE_URL, MODEL_NAME
+
+
+AIHOT_API_URL = "https://aihot.virxact.com/api/public/items"
+AIHOT_AI_TRACK_CATEGORIES = ("ai-products", "tip")
+AIHOT_SOURCE_WEIGHTS = {
+    "官网": 14,
+    "Newsroom": 14,
+    "GitHub": 12,
+    "Hugging Face": 11,
+    "Hacker News": 10,
+    "RSS": 8,
+    "X：": 5,
+}
+AIHOT_KEYWORD_WEIGHTS = {
+    "发布": 8,
+    "推出": 8,
+    "上线": 8,
+    "开源": 7,
+    "升级": 6,
+    "新增": 5,
+    "模型": 5,
+    "工具": 5,
+    "Agent": 5,
+    "智能体": 5,
+    "Cursor": 5,
+    "Claude": 5,
+    "OpenAI": 5,
+    "Qwen": 5,
+    "提示词": 4,
+    "最佳实践": 4,
+    "投票点": 4,
+    "排行榜": 4,
+    "效率": 3,
+}
+
+
+FALLBACK_TOPIC_POOL = {
+    "AI赛道": [
+        "AI工具从新鲜感走向生产力，普通人最该补哪一课",
+        "大模型越来越会写，不代表我们越来越会判断",
+        "智能体热潮之后，真正能落地的能力到底是什么",
+    ],
+    "生活赛道": [
+        "家里越住越乱，往往不是东西太多，而是收纳顺序错了",
+        "成年人真正省钱的方法，不是硬忍，而是减少低效消费",
+        "厨房整理这件小事，为什么总能影响一天的心情",
+    ],
+    "感悟赛道": [
+        "人到中年才慢慢明白，稳定从来不是一种状态",
+        "很多关系走散，不是因为坏，而是因为来不及说真话",
+        "真正让人松一口气的，不是想通，而是放过自己",
+    ],
+    "人物赛道": [
+        "一个人被时代误解之后，真正留下来的是什么",
+        "那些被反复讲述的人物故事，往往藏着另一层现实",
+        "传奇人物最值得看的，不是高光时刻，而是低谷里的决定",
+    ],
+    "高校赛道": [
+        "大学里最容易被忽视的一课，其实和成绩无关",
+        "毕业前的焦虑为什么总会提前一年出现",
+        "实习、考研、就业同时压过来时，先解决哪件事",
+    ],
+}
 
 
 # ==================== 今日头条搜索 ====================
@@ -79,7 +142,13 @@ class ToutiaoSearcher:
         data = resp.json()
         results = []
 
-        for item in data.get("data", []):
+        items = data.get("data") or []
+        if not isinstance(items, list):
+            return []
+
+        for item in items:
+            if not isinstance(item, dict):
+                continue
             title = item.get("title", "")
             if title and len(title) > 5:
                 results.append({
@@ -135,7 +204,12 @@ class ToutiaoSearcher:
             resp = self.session.get(url, timeout=15)
             if resp.status_code == 200:
                 data = resp.json()
-                for item in data.get("data", []):
+                items = data.get("data") or []
+                if not isinstance(items, list):
+                    return []
+                for item in items:
+                    if not isinstance(item, dict):
+                        continue
                     title = item.get("Title", "")
                     if title:
                         results.append({
@@ -215,6 +289,142 @@ class WeixinSearcher:
         return results[:count]
 
 
+# ==================== AI HOT 搜索 ====================
+
+def _normalize_topic_key(value: str) -> str:
+    return re.sub(r"\s+", "", str(value or "").lower())[:80]
+
+
+def load_generated_topic_keys(output_root: str | None = None, track_name: str = "AI赛道") -> set[str]:
+    """Collect generated topic URLs/titles so the next run can avoid repeats."""
+    try:
+        from config import OUTPUT_DIR
+    except Exception:
+        OUTPUT_DIR = None
+
+    root = Path(output_root) if output_root else OUTPUT_DIR
+    if not root or not root.exists():
+        return set()
+
+    keys: set[str] = set()
+    search_roots = [root]
+    users_root = root / "users"
+    if users_root.exists():
+        search_roots.extend([p for p in users_root.iterdir() if p.is_dir()])
+
+    for search_root in search_roots:
+        for meta_path in search_root.rglob("meta.json"):
+            try:
+                with open(meta_path, "r", encoding="utf-8") as f:
+                    meta = json.load(f)
+            except Exception:
+                continue
+            if meta.get("track") != track_name:
+                continue
+            hot_topic = meta.get("hot_topic") or {}
+            for field in ("url", "original_topic", "title"):
+                value = hot_topic.get(field)
+                if value:
+                    keys.add(_normalize_topic_key(value))
+            if meta.get("title"):
+                keys.add(_normalize_topic_key(meta.get("title")))
+    return keys
+
+
+def _score_aihot_item(item: dict) -> int:
+    text = " ".join(
+        str(item.get(key) or "")
+        for key in ("title", "title_en", "summary", "source")
+    )
+    score = 0
+    category = item.get("category", "")
+    if category == "ai-products":
+        score += 28
+    elif category == "tip":
+        score += 22
+
+    source = str(item.get("source") or "")
+    for marker, weight in AIHOT_SOURCE_WEIGHTS.items():
+        if marker in source:
+            score += weight
+            break
+
+    for keyword, weight in AIHOT_KEYWORD_WEIGHTS.items():
+        if keyword.lower() in text.lower():
+            score += weight
+
+    if item.get("summary"):
+        score += min(len(str(item["summary"])) // 80, 8)
+    if item.get("url"):
+        score += 3
+
+    published_at = item.get("publishedAt")
+    if published_at:
+        try:
+            dt = datetime.fromisoformat(str(published_at).replace("Z", "+00:00"))
+            age_hours = (datetime.now(timezone.utc) - dt).total_seconds() / 3600
+            score += max(0, int(12 - age_hours / 2))
+        except Exception:
+            pass
+    return score
+
+
+def search_aihot_topics(
+    *,
+    categories: tuple[str, ...] = AIHOT_AI_TRACK_CATEGORIES,
+    hours: int = 24,
+    count: int = 20,
+    generated_keys: set[str] | None = None,
+) -> list[dict]:
+    """Fetch AI HOT topics for AI赛道, restricted to recent products/tips."""
+    generated_keys = generated_keys or set()
+    since = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+    all_items = []
+
+    for category in categories:
+        params = {
+            "mode": "selected",
+            "category": category,
+            "since": since,
+        }
+        try:
+            resp = requests.get(AIHOT_API_URL, params=params, timeout=15)
+            if resp.status_code != 200:
+                print(f"  [WARN] AI HOT {category} 请求失败 (HTTP {resp.status_code})")
+                continue
+            data = resp.json()
+            items = data.get("items") or []
+            if isinstance(items, list):
+                all_items.extend(items)
+        except Exception as e:
+            print(f"  [WARN] AI HOT {category} 请求异常: {e}")
+
+    unique = []
+    seen = set()
+    for item in all_items:
+        if not isinstance(item, dict):
+            continue
+        title = str(item.get("title") or "").strip()
+        if not title:
+            continue
+        url_key = _normalize_topic_key(item.get("url", ""))
+        title_key = _normalize_topic_key(title)
+        if url_key in generated_keys or title_key in generated_keys:
+            continue
+        dedupe_key = url_key or title_key
+        if dedupe_key in seen:
+            continue
+        seen.add(dedupe_key)
+        scored = dict(item)
+        scored["hot_score"] = _score_aihot_item(item)
+        scored["source"] = f"aihot:{item.get('source', '')}"
+        scored["abstract"] = item.get("summary") or ""
+        unique.append(scored)
+
+    unique.sort(key=lambda item: item.get("hot_score", 0), reverse=True)
+    return unique[:count]
+
+
 # ==================== 统一搜索 + AI选题筛选 ====================
 
 def search_hot_topics(keywords: list[str], sources: list[str] = None, count: int = 20) -> list[dict]:
@@ -262,6 +472,27 @@ def search_hot_topics(keywords: list[str], sources: list[str] = None, count: int
     return unique[:count]
 
 
+def build_fallback_topics(track_name: str, keywords: list[str], count: int = 5) -> list[dict]:
+    """Return local fallback topics when search engines provide nothing useful."""
+    candidates = FALLBACK_TOPIC_POOL.get(track_name, [])
+    results = []
+    for title in candidates[:count]:
+        results.append({
+            "title": title,
+            "source": "fallback_pool",
+            "abstract": "本地保底选题",
+        })
+
+    if not results:
+        seed = "、".join(keywords[:3]) if keywords else track_name
+        results.append({
+            "title": f"{track_name}里最容易被忽视的问题，可能就藏在{seed}里",
+            "source": "fallback_pool",
+            "abstract": "关键词保底选题",
+        })
+    return results[:count]
+
+
 def select_best_topic(
     track_name: str,
     track_prompt: str,
@@ -285,7 +516,12 @@ def select_best_topic(
 
     # 构建选题列表
     topic_list = "\n".join(
-        f"{i+1}. {t['title']} (来源: {t.get('source', 'unknown')})"
+        (
+            f"{i+1}. {t['title']} "
+            f"(来源: {t.get('source', 'unknown')}；分类: {t.get('category', 'unknown')}；"
+            f"热度估分: {t.get('hot_score', 'n/a')})\n"
+            f"摘要: {(t.get('abstract') or t.get('summary') or '')[:180]}"
+        )
         for i, t in enumerate(hot_topics[:15])
     )
 
@@ -332,11 +568,22 @@ def select_best_topic(
         json_match = re.search(r'\{[\s\S]*\}', raw)
         if json_match:
             data = json.loads(json_match.group())
+            selected_index = data.get("selected_index", 1)
+            try:
+                selected_index = int(selected_index)
+            except (TypeError, ValueError):
+                selected_index = 1
+            if not 1 <= selected_index <= len(hot_topics):
+                selected_index = 1
             return {
                 "title": data.get("title", ""),
                 "angle": data.get("angle", ""),
                 "reason": data.get("reason", ""),
-                "original_topic": hot_topics[data.get("selected_index", 1) - 1]["title"] if data.get("selected_index", 0) <= len(hot_topics) else "",
+                "original_topic": hot_topics[selected_index - 1]["title"],
+                "url": hot_topics[selected_index - 1].get("url", ""),
+                "source": hot_topics[selected_index - 1].get("source", ""),
+                "category": hot_topics[selected_index - 1].get("category", ""),
+                "hot_score": hot_topics[selected_index - 1].get("hot_score", 0),
             }
     except Exception as e:
         print(f"  [WARN] AI选题筛选失败: {e}")
@@ -344,7 +591,15 @@ def select_best_topic(
     # 降级：随机选一个
     if hot_topics:
         topic = random.choice(hot_topics)
-        return {"title": topic["title"], "angle": "直接切入"}
+        return {
+            "title": topic["title"],
+            "angle": "直接切入",
+            "original_topic": topic["title"],
+            "url": topic.get("url", ""),
+            "source": topic.get("source", ""),
+            "category": topic.get("category", ""),
+            "hot_score": topic.get("hot_score", 0),
+        }
 
     return None
 
